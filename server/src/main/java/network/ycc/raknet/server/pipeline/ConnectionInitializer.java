@@ -141,10 +141,20 @@ public class ConnectionInitializer extends AbstractConnectionInitializer {
         }
     }
 
-    protected class RestartConnectionHandler extends ChannelInboundHandlerAdapter {
+    protected static class RestartConnectionHandler extends ChannelInboundHandlerAdapter {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
-            if (msg instanceof Packet.ClientIdConnection || msg instanceof ConnectionRequest1) {
+            if (msg instanceof Packet.ClientIdConnection) {
+                Packet.ClientIdConnection clientIdConnectionPacket = (Packet.ClientIdConnection) msg;
+                final RakNet.Config config = RakNet.config(ctx);
+                if (clientIdConnectionPacket.getClientId() == config.getClientId()) {
+                    //noinspection RedundantStringFormatCall
+                    System.err.println(String.format("Warning: Not restarting RakNet connection for client %s (Possibly caused by high latency)", ctx.channel().remoteAddress()));
+                } else {
+                    ctx.writeAndFlush(new ConnectionFailed(config.getMagic())).addListener(ChannelFutureListener.CLOSE);
+                    ReferenceCountUtil.safeRelease(msg);
+                }
+            } else if (msg instanceof ConnectionRequest1) {
                 final RakNet.Config config = RakNet.config(ctx);
                 ctx.writeAndFlush(new ConnectionFailed(config.getMagic())).addListener(ChannelFutureListener.CLOSE);
                 ReferenceCountUtil.safeRelease(msg);
