@@ -1,5 +1,6 @@
 package network.ycc.raknet.pipeline;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.packet.FrameSet;
@@ -33,7 +34,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     protected final IntSortedSet nackSet = new IntRBTreeSet(UINT.B3.COMPARATOR);
     protected final IntSortedSet ackSet = new IntRBTreeSet(UINT.B3.COMPARATOR);
     protected final ObjectSortedSet<Frame> frameQueue = new ObjectRBTreeSet<>(Frame.COMPARATOR);
-    protected final Int2ObjectMap<FrameSet> pendingFrameSets = new Int2ObjectOpenHashMap<>();
+    protected final Int2ObjectLinkedOpenHashMap<FrameSet> pendingFrameSets = new Int2ObjectLinkedOpenHashMap<>();
 
     protected int queuedBytes = 0;
 
@@ -233,7 +234,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
                 packetItr.remove();
                 recallFrameSet(frameSet);
             } else {
-                //break; //TODO: FrameSets should be ordered by send time ultimately
+                break; // FrameSets are ordered by send time: LinkedMap
             }
         }
     }
