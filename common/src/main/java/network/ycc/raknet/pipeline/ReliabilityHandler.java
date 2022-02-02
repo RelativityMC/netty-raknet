@@ -35,6 +35,8 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     protected final ObjectSortedSet<Frame> frameQueue = new ObjectRBTreeSet<>(Frame.COMPARATOR);
     protected final Int2ObjectMap<FrameSet> pendingFrameSets = new Int2ObjectOpenHashMap<>();
 
+    protected int queuedBytes = 0;
+
     protected int lastReceivedSeqId = 0;
     protected int nextSendSeqId = 0;
     protected int resendGauge = 0;
@@ -118,6 +120,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
         }
         frameQueue.forEach(Frame::release);
         frameQueue.clear();
+        this.queuedBytes = 0;
         pendingFrameSets.values().forEach(FrameSet::release);
         pendingFrameSets.clear();
     }
@@ -176,12 +179,14 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected void queueFrame(Frame frame) {
-        if (frame.getRoughPacketSize() > config.getMTU()) {
+        final int roughPacketSize = frame.getRoughPacketSize();
+        if (roughPacketSize > config.getMTU()) {
             throw new CorruptedFrameException(
-                    "Finished frame larger than the MTU by " + (frame.getRoughPacketSize() - config
+                    "Finished frame larger than the MTU by " + (roughPacketSize - config
                             .getMTU()));
         }
         frameQueue.add(frame);
+        this.queuedBytes += roughPacketSize;
     }
 
     protected void adjustResendGauge(int n) {
@@ -239,14 +244,16 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
         while (itr.hasNext()) {
             final Frame frame = itr.next();
             assert frame.refCnt() > 0 : "Frame has lost reference";
-            if (frameSet.getRoughSize() + frame.getRoughPacketSize() > maxSize) {
+            final int roughPacketSize = frame.getRoughPacketSize();
+            if (frameSet.getRoughSize() + roughPacketSize > maxSize) {
                 if (frameSet.isEmpty()) {
                     throw new CorruptedFrameException(
-                            "Finished frame larger than the MTU by " + (frame.getRoughPacketSize() - maxSize));
+                            "Finished frame larger than the MTU by " + (roughPacketSize - maxSize));
                 }
                 break;
             }
             itr.remove();
+            this.queuedBytes -= roughPacketSize;
             frameSet.addPacket(frame);
         }
         if (!frameSet.isEmpty()) {
@@ -312,11 +319,12 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected int getQueuedBytes() {
-        int byteSize = 0;
-        for (Frame frame : frameQueue) {
-            byteSize += frame.getRoughPacketSize();
-        }
-        return byteSize;
+//        int byteSize = 0;
+//        for (Frame frame : frameQueue) {
+//            byteSize += frame.getRoughPacketSize();
+//        }
+//        return byteSize;
+        return this.queuedBytes;
     }
 
 }
