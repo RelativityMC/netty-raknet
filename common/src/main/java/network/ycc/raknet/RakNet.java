@@ -78,6 +78,8 @@ public class RakNet {
         default void measureRTTns(long n) {}
         default void measureRTTnsStdDev(long n) {}
         default void measureBurstTokens(int n) {}
+
+        default void currentQueuedBytes(int bytes) {}
     }
 
     public interface Config extends ChannelConfig {

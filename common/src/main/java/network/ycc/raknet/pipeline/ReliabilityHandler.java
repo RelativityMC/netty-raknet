@@ -188,6 +188,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
         }
         frameQueue.add(frame);
         this.queuedBytes += roughPacketSize;
+        config.getMetrics().currentQueuedBytes(this.queuedBytes);
     }
 
     protected void adjustResendGauge(int n) {
@@ -265,6 +266,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
             ctx.write(frameSet.retain()).addListener(RakNet.INTERNAL_WRITE_LISTENER);
             config.getMetrics().packetsOut(1);
             config.getMetrics().framesOut(frameSet.getNumPackets());
+            config.getMetrics().currentQueuedBytes(this.queuedBytes);
             assert frameSet.refCnt() > 0;
         } else {
             frameSet.release();
