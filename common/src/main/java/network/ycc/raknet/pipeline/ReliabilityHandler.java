@@ -43,10 +43,18 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     protected int resendGauge = 0;
     protected int burstTokens = 0;
     protected RakNet.Config config = null; //TODO: not really needed anymore
+    protected ChannelHandlerContext ctx;
+
+    protected boolean isFrameSetProductionPending = false;
+    protected Runnable frameSetProduction = () -> {
+        this.produceFrameSets(ctx);
+        this.isFrameSetProductionPending = false;
+    };
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         config = RakNet.config(ctx);
+        this.ctx = ctx;
         ctx.channel().attr(RakNet.WRITABLE).set(true);
     }
 
@@ -155,6 +163,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
                     adjustResendGauge(1);
                     frameSet.succeed();
                     frameSet.release();
+                    tryProduceFrameSets();
                 }
                 Constants.packetLossCheck(nIterations++, "ack confirm range");
             }
@@ -282,6 +291,11 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
         }
     }
 
+    protected void tryProduceFrameSets() {
+        if (!isFrameSetProductionPending)
+            ctx.executor().execute(frameSetProduction);
+    }
+
     //TODO: instead of immediate recall, mark framesets as 'recalled', and flush at flush cycle
     protected void recallFrameSet(FrameSet frameSet) {
         try {
@@ -296,6 +310,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
                     frame.release();
                 }
             });
+            tryProduceFrameSets();
         } finally {
             frameSet.release();
         }
