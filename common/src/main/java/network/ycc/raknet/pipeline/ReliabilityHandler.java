@@ -77,8 +77,8 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
         //all data sent in order of priority
         sendResponses(ctx);
         recallExpiredFrameSets();
-        updateBurstTokens(1);
         produceFrameSets(ctx);
+        updateBurstTokens(1);
         updateBackPressure(ctx);
         Constants.packetLossCheck(pendingFrameSets.size(), "resend queue");
         ctx.flush();
