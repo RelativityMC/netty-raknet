@@ -37,6 +37,7 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
     private volatile int[] protocolVersions = new int[]{9, 10};
     private volatile int maxConnections = 2048;
     private volatile int protocolVersion = 9;
+    private volatile boolean ignoreResendGauge = false;
 
     public DefaultConfig(Channel channel) {
         super(channel);
@@ -234,5 +235,14 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
 
     public void setProtocolVersion(int protocolVersion) {
         this.protocolVersion = protocolVersion;
+    }
+
+    public boolean isIgnoreResendGauge() {
+        return ignoreResendGauge;
+    }
+
+    @Override
+    public void setIgnoreResendGauge(boolean ignoreResendGauge) {
+        this.ignoreResendGauge = ignoreResendGauge;
     }
 }

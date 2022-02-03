@@ -139,6 +139,9 @@ public class RakNet {
 
         int getMaxConnections();
         void setMaxConnections(int maxConnections);
+
+        boolean isIgnoreResendGauge();
+        void setIgnoreResendGauge(boolean value);
     }
 
     public interface Codec {

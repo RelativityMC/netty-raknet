@@ -56,6 +56,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
         config = RakNet.config(ctx);
         this.ctx = ctx;
         ctx.channel().attr(RakNet.WRITABLE).set(true);
+        if (config.isIgnoreResendGauge()) this.resendGauge = 2;
     }
 
     @Override
@@ -201,6 +202,10 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected void adjustResendGauge(int n) {
+        if (config.isIgnoreResendGauge()) {
+            this.resendGauge = 2;
+            return;
+        }
         //clamped gauge, can rebound more easily
         resendGauge = Math.max(
                 -config.getDefaultPendingFrameSets(),
