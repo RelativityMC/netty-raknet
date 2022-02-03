@@ -44,7 +44,7 @@ public class DatagramChannelProxy implements Channel {
         pipeline()
                 .addLast(LISTENER_HANDLER_NAME, new ListnerOutboundProxy())
                 .addLast(new FlushConsolidationHandler(
-                        FlushConsolidationHandler.DEFAULT_EXPLICIT_FLUSH_AFTER_FLUSHES, true));
+                        256, true));
         config = new Config();
     }
 

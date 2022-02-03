@@ -89,7 +89,7 @@ public class RakNetClientChannel extends DatagramChannelProxy {
                                 new ConnectionInitializer(connectPromise));
                     }
                 });
-                final PromiseCombiner combiner = new PromiseCombiner(eventLoop());
+                final PromiseCombiner combiner = new PromiseCombiner();
                 combiner.add(listenerConnect);
                 combiner.add((ChannelFuture) connectPromise);
                 combiner.finish(promise);

@@ -53,7 +53,7 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
 
     @Override
     protected void gracefulClose(ChannelPromise promise) {
-        final PromiseCombiner combined = new PromiseCombiner(eventLoop());
+        final PromiseCombiner combined = new PromiseCombiner();
         final ChannelPromise childrenClosed = newPromise();
         childMap.values().forEach(child -> combined.add(child.close()));
         combined.finish(childrenClosed);

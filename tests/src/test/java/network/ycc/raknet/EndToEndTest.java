@@ -173,7 +173,7 @@ public class EndToEndTest {
         ConcurrentHashMap<Long, Object> unreliableSet = new ConcurrentHashMap<>();
         ConcurrentHashMap<Long, Object> reliableSet = new ConcurrentHashMap<>();
         EventLoop testLoop = childGroup.next();
-        PromiseCombiner combiner = new PromiseCombiner(testLoop);
+        PromiseCombiner combiner = new PromiseCombiner();
         MockDatagramPair mockPair = mockTransport ? new MockDatagramPair() : null;
         Brutalizer brutalizer = new Brutalizer();
 
