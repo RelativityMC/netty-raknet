@@ -287,6 +287,10 @@ public final class Frame extends AbstractReferenceCounted {
         this.reliableIndex = reliableIndex;
     }
 
+    public int getReliableIndex() {
+        return this.reliableIndex;
+    }
+
     public ChannelPromise getPromise() {
         return promise;
     }
