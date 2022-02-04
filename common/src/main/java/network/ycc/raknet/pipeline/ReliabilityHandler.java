@@ -138,11 +138,13 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     protected void readFrameSet(ChannelHandlerContext ctx, FrameSet frameSet) {
         final int packetSeqId = frameSet.getSeqId();
         ackSet.add(packetSeqId);
-        nackSet.remove(packetSeqId);
+        if (config.isNACKEnabled())
+            nackSet.remove(packetSeqId);
         if (UINT.B3.minusWrap(packetSeqId, lastReceivedSeqId) > 0) {
             lastReceivedSeqId = UINT.B3.plus(lastReceivedSeqId, 1);
             while (lastReceivedSeqId != packetSeqId) { //nack any missed packets before this one
-                nackSet.add(lastReceivedSeqId); //add missing packets to nack set
+                if (config.isNACKEnabled())
+                    nackSet.add(lastReceivedSeqId); //add missing packets to nack set
                 lastReceivedSeqId = UINT.B3.plus(lastReceivedSeqId, 1);
             }
         }
@@ -173,6 +175,8 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected void readNack(Reliability.NACK nack) {
+        if (!config.isNACKEnabled()) return;
+
         int bytesNACKd = 0;
         int nIterations = 0;
         for (Reliability.REntry entry : nack.getEntries()) {
@@ -231,7 +235,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
             config.getMetrics().acksSent(ackSet.size());
             ackSet.clear();
         }
-        if (!nackSet.isEmpty() && config.isAutoRead()) { //only nack if we can read
+        if (config.isNACKEnabled() && !nackSet.isEmpty() && config.isAutoRead()) { //only nack if we can read
             ctx.write(new Reliability.NACK(nackSet)).addListener(RakNet.INTERNAL_WRITE_LISTENER);
             config.getMetrics().nacksSent(nackSet.size());
             nackSet.clear();

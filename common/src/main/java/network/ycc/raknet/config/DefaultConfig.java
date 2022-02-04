@@ -38,6 +38,7 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
     private volatile int maxConnections = 2048;
     private volatile int protocolVersion = 9;
     private volatile boolean ignoreResendGauge = false;
+    private volatile boolean NACKEnabled = true;
 
     public DefaultConfig(Channel channel) {
         super(channel);
@@ -237,6 +238,7 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
         this.protocolVersion = protocolVersion;
     }
 
+    @Override
     public boolean isIgnoreResendGauge() {
         return ignoreResendGauge;
     }
@@ -244,5 +246,15 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
     @Override
     public void setIgnoreResendGauge(boolean ignoreResendGauge) {
         this.ignoreResendGauge = ignoreResendGauge;
+    }
+
+    @Override
+    public boolean isNACKEnabled() {
+        return NACKEnabled;
+    }
+
+    @Override
+    public void setNACKEnabled(boolean NACKEnabled) {
+        this.NACKEnabled = NACKEnabled;
     }
 }

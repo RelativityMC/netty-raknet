@@ -142,6 +142,9 @@ public class RakNet {
 
         boolean isIgnoreResendGauge();
         void setIgnoreResendGauge(boolean value);
+
+        boolean isNACKEnabled();
+        void setNACKEnabled(boolean value);
     }
 
     public interface Codec {
