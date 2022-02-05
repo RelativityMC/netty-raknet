@@ -48,6 +48,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     protected boolean isFrameSetProductionPending = false;
     protected Runnable frameSetProduction = () -> {
         this.produceFrameSets(ctx);
+        ctx.flush();
         this.isFrameSetProductionPending = false;
     };
 
@@ -244,7 +245,10 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected void trySendResponses(ChannelHandlerContext ctx) {
-        if (ackSet.size() >= config.getDefaultPendingFrameSets() - 1) sendResponses(ctx);
+        if (ackSet.size() >= config.getDefaultPendingFrameSets() - 1) {
+            sendResponses(ctx);
+            ctx.flush();
+        }
     }
 
     protected void recallExpiredFrameSets() {
@@ -286,7 +290,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
             nextSendSeqId = UINT.B3.plus(nextSendSeqId, 1);
             pendingFrameSets.put(frameSet.getSeqId(), frameSet);
             frameSet.touch("Added to pending FrameSet list");
-            ctx.writeAndFlush(frameSet.retain()).addListener(RakNet.INTERNAL_WRITE_LISTENER);
+            ctx.write(frameSet.retain()).addListener(RakNet.INTERNAL_WRITE_LISTENER);
             config.getMetrics().packetsOut(1);
             config.getMetrics().framesOut(frameSet.getNumPackets());
             config.getMetrics().currentQueuedBytes(this.queuedBytes);

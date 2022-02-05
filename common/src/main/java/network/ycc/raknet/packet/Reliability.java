@@ -10,13 +10,18 @@ import it.unimi.dsi.fastutil.ints.IntSortedSet;
 
 public class Reliability extends SimplePacket implements Packet {
 
+    private static final REntry[] EMPTY = new REntry[0];
     private REntry[] entries;
 
     private Reliability() {
     }
 
+    private Reliability(int id) {
+        entries = new REntry[]{new REntry(id)};
+    }
+
     private Reliability(IntSortedSet ids) {
-        entries = new REntry[0];
+        entries = EMPTY;
         if (ids.isEmpty()) {
             return;
         }
@@ -91,6 +96,10 @@ public class Reliability extends SimplePacket implements Packet {
         public ACK() {
         }
 
+        public ACK(int id) {
+            super(id);
+        }
+
         public ACK(IntSortedSet ids) {
             super(ids);
         }
@@ -98,6 +107,10 @@ public class Reliability extends SimplePacket implements Packet {
 
     public static class NACK extends Reliability {
         public NACK() {
+        }
+
+        public NACK(int id) {
+            super(id);
         }
 
         public NACK(IntSortedSet ids) {
