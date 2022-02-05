@@ -1,6 +1,15 @@
 package network.ycc.raknet.pipeline;
 
+import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
+import io.netty.handler.codec.CodecException;
+import io.netty.handler.codec.CorruptedFrameException;
+import io.netty.util.ReferenceCountUtil;
 import it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntRBTreeSet;
+import it.unimi.dsi.fastutil.ints.IntSortedSet;
+import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.frame.Frame;
 import network.ycc.raknet.packet.FrameSet;
@@ -9,20 +18,7 @@ import network.ycc.raknet.pipeline.FlushTickHandler.MissedFlushes;
 import network.ycc.raknet.utils.Constants;
 import network.ycc.raknet.utils.UINT;
 
-import io.netty.channel.ChannelDuplexHandler;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelPromise;
-import io.netty.handler.codec.CodecException;
-import io.netty.handler.codec.CorruptedFrameException;
-import io.netty.util.ReferenceCountUtil;
-
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.ints.IntRBTreeSet;
-import it.unimi.dsi.fastutil.ints.IntSortedSet;
-import it.unimi.dsi.fastutil.objects.ObjectIterator;
-import it.unimi.dsi.fastutil.objects.ObjectRBTreeSet;
-import it.unimi.dsi.fastutil.objects.ObjectSortedSet;
+import java.util.PriorityQueue;
 
 /**
  * This handler handles the bulk of reliable (framed) transport.
@@ -33,7 +29,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
 
     protected final IntSortedSet nackSet = new IntRBTreeSet(UINT.B3.COMPARATOR);
     protected final IntSortedSet ackSet = new IntRBTreeSet(UINT.B3.COMPARATOR);
-    protected final ObjectSortedSet<Frame> frameQueue = new ObjectRBTreeSet<>(Frame.COMPARATOR);
+    protected final PriorityQueue<Frame> frameQueue = new PriorityQueue<>(Frame.COMPARATOR);
     protected final Int2ObjectLinkedOpenHashMap<FrameSet> pendingFrameSets = new Int2ObjectLinkedOpenHashMap<>();
 
     protected int queuedBytes = 0;
@@ -268,10 +264,10 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected void produceFrameSet(ChannelHandlerContext ctx, int maxSize) {
-        final ObjectIterator<Frame> itr = frameQueue.iterator();
+        if (frameQueue.isEmpty()) return;
         final FrameSet frameSet = FrameSet.create();
-        while (itr.hasNext()) {
-            final Frame frame = itr.next();
+        Frame frame;
+        while ((frame = frameQueue.peek()) != null) {
             assert frame.refCnt() > 0 : "Frame has lost reference";
             final int roughPacketSize = frame.getRoughPacketSize();
             if (frameSet.getRoughSize() + roughPacketSize > maxSize) {
@@ -281,7 +277,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
                 }
                 break;
             }
-            itr.remove();
+            frameQueue.poll();
             this.queuedBytes -= roughPacketSize;
             frameSet.addPacket(frame);
         }
