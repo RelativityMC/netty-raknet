@@ -151,6 +151,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
         config.getMetrics().packetsIn(1);
         config.getMetrics().framesIn(frameSet.getNumPackets());
         frameSet.createFrames(ctx::fireChannelRead);
+        trySendResponses(ctx);
         ctx.fireChannelReadComplete();
     }
 
@@ -240,6 +241,10 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
             config.getMetrics().nacksSent(nackSet.size());
             nackSet.clear();
         }
+    }
+
+    protected void trySendResponses(ChannelHandlerContext ctx) {
+        if (ackSet.size() > 8) sendResponses(ctx);
     }
 
     protected void recallExpiredFrameSets() {

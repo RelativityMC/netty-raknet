@@ -36,6 +36,7 @@ public final class FrameSet extends AbstractReferenceCounted implements Packet {
     protected int seqId;
     protected long sentTime;
     protected ResourceLeakTracker<FrameSet> tracker;
+    protected int size;
     private FrameSet(Recycler.Handle<FrameSet> handle) {
         this.handle = handle;
         setRefCnt(0);
@@ -49,6 +50,7 @@ public final class FrameSet extends AbstractReferenceCounted implements Packet {
         out.sentTime = System.nanoTime();
         out.seqId = 0;
         out.tracker = leakDetector.track(out);
+        out.size = HEADER_SIZE;
         out.setRefCnt(1);
         return out;
     }
@@ -59,7 +61,9 @@ public final class FrameSet extends AbstractReferenceCounted implements Packet {
             buf.skipBytes(1);
             out.seqId = buf.readUnsignedMediumLE();
             while (buf.isReadable()) {
-                out.frames.add(Frame.read(buf));
+                final Frame frame = Frame.read(buf);
+                out.frames.add(frame);
+                out.size += frame.getRoughPacketSize();
             }
             return out.retain();
         } catch (IndexOutOfBoundsException e) {
@@ -83,6 +87,7 @@ public final class FrameSet extends AbstractReferenceCounted implements Packet {
     protected void deallocate() {
         frames.forEach(Frame::release);
         frames.clear();
+        size = HEADER_SIZE;
         if (tracker != null) {
             tracker.close(this);
             tracker = null;
@@ -160,6 +165,7 @@ public final class FrameSet extends AbstractReferenceCounted implements Packet {
 
     public void addPacket(Frame packet) {
         frames.add(packet);
+        size += packet.getRoughPacketSize();
     }
 
     public void createFrames(Consumer<Frame> consumer) {
@@ -167,11 +173,12 @@ public final class FrameSet extends AbstractReferenceCounted implements Packet {
     }
 
     public int getRoughSize() {
-        int out = HEADER_SIZE;
-        for (Frame packet : frames) {
-            out += packet.getRoughPacketSize();
-        }
-        return out;
+//        int out = HEADER_SIZE;
+//        for (Frame packet : frames) {
+//            out += packet.getRoughPacketSize();
+//        }
+//        return out;
+        return size;
     }
 
     public boolean isEmpty() {
