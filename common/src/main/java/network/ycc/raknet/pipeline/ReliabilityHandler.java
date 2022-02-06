@@ -41,11 +41,9 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     protected RakNet.Config config = null; //TODO: not really needed anymore
     protected ChannelHandlerContext ctx;
 
-    protected boolean isFrameSetProductionPending = false;
     protected Runnable frameSetProduction = () -> {
         this.produceFrameSets(ctx);
         ctx.flush();
-        this.isFrameSetProductionPending = false;
     };
 
     @Override
@@ -306,8 +304,7 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected void tryProduceFrameSets() {
-        if (!isFrameSetProductionPending)
-            ctx.executor().execute(frameSetProduction);
+        ctx.executor().execute(frameSetProduction);
     }
 
     //TODO: instead of immediate recall, mark framesets as 'recalled', and flush at flush cycle

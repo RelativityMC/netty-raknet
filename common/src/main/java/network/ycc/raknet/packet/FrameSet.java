@@ -58,12 +58,12 @@ public final class FrameSet extends AbstractReferenceCounted implements Packet {
     public static FrameSet read(ByteBuf buf) {
         final FrameSet out = create();
         try {
+            out.size = buf.readableBytes();
             buf.skipBytes(1);
             out.seqId = buf.readUnsignedMediumLE();
             while (buf.isReadable()) {
                 final Frame frame = Frame.read(buf);
                 out.frames.add(frame);
-                out.size += frame.getRoughPacketSize();
             }
             return out.retain();
         } catch (IndexOutOfBoundsException e) {
