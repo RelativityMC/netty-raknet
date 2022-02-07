@@ -23,7 +23,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
-public class HelloWorld {
+public class TestHelloWorld {
 
     final EventLoopGroup ioGroup = new NioEventLoopGroup();
     final EventLoopGroup childGroup = new DefaultEventLoopGroup();

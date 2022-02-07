@@ -2,6 +2,8 @@ package network.ycc.raknet.server.channel;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.util.concurrent.PromiseCombiner;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.config.DefaultConfig;
 import network.ycc.raknet.server.RakNetServer;
@@ -25,8 +27,10 @@ public class RakNetChildChannel extends AbstractChannel {
 
     private static final ChannelMetadata metadata = new ChannelMetadata(false);
     protected final ChannelPromise connectPromise;
+    protected final ChannelPromise closePromise;
     protected final RakNet.Config config;
     protected final InetSocketAddress remoteAddress;
+    protected final RakNetApplicationChannel applicationChannel;
 
     protected volatile boolean open = true;
 
@@ -35,8 +39,10 @@ public class RakNetChildChannel extends AbstractChannel {
         this.remoteAddress = remoteAddress;
         config = new DefaultConfig(this);
         connectPromise = newPromise();
+        closePromise = newPromise();
         config.setMetrics(parent.config().getOption(RakNet.METRICS));
         config.setServerId(parent.config().getOption(RakNet.SERVER_ID));
+        this.applicationChannel = new RakNetApplicationChannel(this);
         pipeline().addLast(new WriteHandler());
         addDefaultPipeline();
     }
@@ -45,6 +51,7 @@ public class RakNetChildChannel extends AbstractChannel {
         pipeline().addLast(RakNetServer.DefaultChildInitializer.INSTANCE);
         connectPromise.addListener(x2 -> {
             if (!x2.isSuccess()) {
+                RakNetChildChannel.this.applicationChannel.close();
                 RakNetChildChannel.this.close();
             }
         });
@@ -52,6 +59,7 @@ public class RakNetChildChannel extends AbstractChannel {
             protected void initChannel(RakNetChildChannel ch) {
                 pipeline().replace(ConnectionInitializer.NAME, ConnectionInitializer.NAME,
                         new ConnectionInitializer(connectPromise));
+                pipeline().addLast(new ReadHandler());
             }
         });
     }
@@ -136,6 +144,24 @@ public class RakNetChildChannel extends AbstractChannel {
     public ChannelMetadata metadata() {
         return metadata;
     }
+//
+//    @Override
+//    public ChannelFuture close() {
+//        if (!open) return this.closePromise;
+//        open = false;
+//        final ChannelFuture close = this.applicationChannel.close();
+//        close.addListener(future -> {
+//            if (future.isSuccess()) {
+//                super.close().addListener(future1 -> {
+//                    if (future.isSuccess()) closePromise.trySuccess();
+//                    else closePromise.tryFailure(future1.cause());
+//                });
+//            } else {
+//                closePromise.tryFailure(future.cause());
+//            }
+//        });
+//        return closePromise;
+//    }
 
     protected class WriteHandler extends ChannelOutboundHandlerAdapter {
         protected boolean needsFlush = false;
@@ -163,6 +189,34 @@ public class RakNetChildChannel extends AbstractChannel {
         @Override
         public void read(ChannelHandlerContext ctx) {
             // NOOP
+        }
+    }
+
+    protected class ReadHandler extends ChannelInboundHandlerAdapter {
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            applicationChannel.pipeline().fireChannelRead(msg);
+        }
+
+        @Override
+        public void channelReadComplete(ChannelHandlerContext ctx) {
+            applicationChannel.pipeline().fireChannelReadComplete();
+        }
+
+        @Override
+        public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
+            applicationChannel.pipeline().fireUserEventTriggered(evt);
+        }
+
+        @Override
+        public void channelWritabilityChanged(ChannelHandlerContext ctx) {
+            applicationChannel.pipeline().fireChannelWritabilityChanged();
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            applicationChannel.pipeline().fireExceptionCaught(cause);
         }
     }
 
