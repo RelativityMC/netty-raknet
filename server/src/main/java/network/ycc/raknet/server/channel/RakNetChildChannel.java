@@ -144,24 +144,10 @@ public class RakNetChildChannel extends AbstractChannel {
     public ChannelMetadata metadata() {
         return metadata;
     }
-//
-//    @Override
-//    public ChannelFuture close() {
-//        if (!open) return this.closePromise;
-//        open = false;
-//        final ChannelFuture close = this.applicationChannel.close();
-//        close.addListener(future -> {
-//            if (future.isSuccess()) {
-//                super.close().addListener(future1 -> {
-//                    if (future.isSuccess()) closePromise.trySuccess();
-//                    else closePromise.tryFailure(future1.cause());
-//                });
-//            } else {
-//                closePromise.tryFailure(future.cause());
-//            }
-//        });
-//        return closePromise;
-//    }
+
+    public RakNetApplicationChannel getApplicationChannel() {
+        return this.applicationChannel;
+    }
 
     protected class WriteHandler extends ChannelOutboundHandlerAdapter {
         protected boolean needsFlush = false;
@@ -193,6 +179,16 @@ public class RakNetChildChannel extends AbstractChannel {
     }
 
     protected class ReadHandler extends ChannelInboundHandlerAdapter {
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+            applicationChannel.pipeline().fireChannelActive();
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            applicationChannel.pipeline().fireChannelInactive();
+        }
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {

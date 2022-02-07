@@ -1,5 +1,7 @@
 package network.ycc.raknet;
 
+import network.ycc.raknet.server.channel.RakNetChildChannel;
+import network.ycc.raknet.server.channel.RakNetServerChannel;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +27,7 @@ import io.netty.handler.codec.CorruptedFrameException;
 
 import java.net.InetSocketAddress;
 import java.nio.channels.UnsupportedAddressTypeException;
+import java.util.concurrent.ExecutionException;
 
 public class BehaviorTest {
     final EventLoopGroup ioGroup = new NioEventLoopGroup();
@@ -38,26 +41,44 @@ public class BehaviorTest {
         try {
             final InetSocketAddress localhostIPv6 = new InetSocketAddress("::1", port);
 
-            final Channel serverChannel = new ServerBootstrap()
-                    .group(ioGroup, childGroup)
-                    .channel(RakNetServer.CHANNEL)
-                    .childHandler(new EmptyInit())
-                    .bind(localhostIPv6).sync().channel();
-
-            final Channel clientChannel = new Bootstrap()
-                    .group(ioGroup)
-                    .channel(RakNetClient.CHANNEL)
-                    .handler(new EmptyInit())
-                    .connect(localhostIPv6).sync().channel();
-
-            try {
-                Assertions.assertTrue(clientChannel.isActive());
-            } finally {
-                serverChannel.close().sync();
-                clientChannel.close().sync();
-            }
+            tryConnect(localhostIPv6);
         } catch (UnsupportedAddressTypeException e) {
             System.out.println("No IPv6 support, skipping.");
+        }
+    }
+
+    @Test
+    public void connectIPv4() throws Throwable {
+        try {
+            tryConnect(localhost);
+        } catch (UnsupportedAddressTypeException e) {
+            System.out.println("No IPv4 support, skipping.");
+        }
+    }
+
+    private void tryConnect(InetSocketAddress localhost) throws InterruptedException, ExecutionException {
+        final Channel serverChannel = new ServerBootstrap()
+                .group(ioGroup, childGroup)
+                .channel(RakNetServer.CHANNEL)
+                .childHandler(new EmptyInit())
+                .bind(localhost).sync().channel();
+
+        final Channel clientChannel = new Bootstrap()
+                .group(ioGroup)
+                .channel(RakNetClient.CHANNEL)
+                .handler(new EmptyInit())
+                .connect(localhost).sync().channel();
+
+        final RakNetChildChannel childChannel = serverChannel.eventLoop().submit(() -> (RakNetChildChannel) ((RakNetServerChannel) serverChannel).getChildChannel(clientChannel.localAddress())).get();
+        childChannel.connectFuture().sync();
+
+        try {
+            Assertions.assertTrue(clientChannel.isActive());
+            Assertions.assertTrue(childChannel.isActive());
+            Assertions.assertTrue(childChannel.getApplicationChannel().isActive());
+        } finally {
+            serverChannel.close().sync();
+            clientChannel.close().sync();
         }
     }
 

@@ -89,7 +89,7 @@ public class RakNetApplicationChannel extends AbstractChannel {
     }
 
     public boolean isActive() {
-        return isOpen() && parent().isActive() && parent().connectPromise.isSuccess();
+        return isOpen() && parent().isActive();
     }
 
     public ChannelMetadata metadata() {
