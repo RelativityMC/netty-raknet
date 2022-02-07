@@ -50,8 +50,9 @@ public class MockDatagram extends AbstractChannel implements DatagramChannel {
                     buf = ((DatagramPacket) msg).content();
                 }
                 if (buf.readableBytes() > fixedMTU) {
-                    writeOut.accept(new DatagramPacket(buf.readSlice(fixedMTU), remoteAddress,
-                            localAddress));
+//                    writeOut.accept(new DatagramPacket(buf.readSlice(fixedMTU), remoteAddress,
+//                            localAddress));
+                    buf.release();
                 } else {
                     writeOut.accept(new DatagramPacket(buf, remoteAddress, localAddress));
                 }

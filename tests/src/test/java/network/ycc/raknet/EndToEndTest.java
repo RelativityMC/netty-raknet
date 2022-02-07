@@ -55,6 +55,11 @@ public class EndToEndTest {
                         func.accept(ctx, msg);
                     }
                 });
+                ch.eventLoop().schedule(() -> {
+                    final ByteBuf buf1 = ch.alloc().buffer(1).writeByte(0);
+                    ch.write(FrameData.create(ch.alloc(), 0xF0, buf1));
+                    buf1.release();
+                }, 10, TimeUnit.MILLISECONDS);
             }
         };
     }
@@ -187,9 +192,6 @@ public class EndToEndTest {
                     numRecvd.incrementAndGet();
                     bytesRecvd.addAndGet(buf.readableBytes());
                 }
-                final ByteBuf buf1 = ctx.alloc().buffer(1).writeByte(0);
-                ctx.writeAndFlush(FrameData.create(ctx.alloc(), 0xFE, buf1));
-                buf1.release();
             }
             ReferenceCountUtil.safeRelease(msg);
         }), mockPair);

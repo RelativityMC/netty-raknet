@@ -1,6 +1,7 @@
 package network.ycc.raknet.server.channel;
 
 import io.netty.channel.AbstractChannel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelMetadata;
 import io.netty.channel.ChannelOutboundBuffer;
@@ -96,11 +97,27 @@ public class RakNetApplicationChannel extends AbstractChannel {
         return parent().metadata();
     }
 
+    @Override
+    public ChannelFuture close() {
+        final ChannelFuture close = super.close();
+        final ChannelPromise promise = newPromise();
+        close.addListener(future -> parent().close().addListener(future1 -> {
+            if (future1.isSuccess()) promise.setSuccess();
+            else promise.setFailure(future1.cause());
+        }));
+        return promise;
+    }
+
     protected class WriteHandler extends ChannelOutboundHandlerAdapter {
 
         @Override
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-            parent().write(msg, promise).addListener(RakNet.INTERNAL_WRITE_LISTENER);
+            final ChannelFuture future = parent().write(msg);
+            future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
+            future.addListener(future1 -> {
+                if (future1.isSuccess()) promise.trySuccess();
+                else promise.tryFailure(future1.cause());
+            });
         }
 
         @Override

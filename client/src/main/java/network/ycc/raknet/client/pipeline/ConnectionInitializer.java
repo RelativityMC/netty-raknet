@@ -21,6 +21,8 @@ import java.net.InetSocketAddress;
 
 public class ConnectionInitializer extends AbstractConnectionInitializer {
 
+    private int cr1Retries = 0;
+
     public ConnectionInitializer(ChannelPromise connectPromise) {
         super(connectPromise);
     }
@@ -83,7 +85,8 @@ public class ConnectionInitializer extends AbstractConnectionInitializer {
         switch (state) {
             case CR1: {
                 final Packet packet = new ConnectionRequest1(config.getMagic(),
-                        config.getProtocolVersion(), config.getMTU());
+                        config.getProtocolVersion(), Math.max(config.getMTU() - (cr1Retries * 16), 130));
+                cr1Retries += 1;
                 ctx.writeAndFlush(packet).addListener(RakNet.INTERNAL_WRITE_LISTENER);
                 break;
             }

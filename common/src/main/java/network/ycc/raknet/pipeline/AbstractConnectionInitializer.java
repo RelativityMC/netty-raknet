@@ -34,7 +34,7 @@ public abstract class AbstractConnectionInitializer extends SimpleChannelInbound
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
         sendTimer = ctx.channel().eventLoop().scheduleAtFixedRate(() -> sendRequest(ctx),
-                0, 200, TimeUnit.MILLISECONDS);
+                0, 50, TimeUnit.MILLISECONDS);
         connectTimer = ctx.channel().eventLoop().schedule(this::doTimeout,
                 ctx.channel().config().getConnectTimeoutMillis(), TimeUnit.MILLISECONDS);
         sendRequest(ctx);
