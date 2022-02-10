@@ -22,6 +22,7 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
     public static final String NAME_CLIENT_THREADED_WRITE_HANDLER = "rn-client-threaded-write-handler";
     public static final String NAME_CLIENT_PARENT_THREADED_READ_HANDLER = "rn-client-parent-threaded-read-handler";
 
+    private EventLoop providedEventLoop = null;
     private EventLoop pendingEventLoop = null;
 
     public RakNetClientThreadedChannel() {
@@ -37,6 +38,10 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
     public RakNetClientThreadedChannel(Supplier<? extends DatagramChannel> ioChannelSupplier) {
         super(new RakNetClientChannel(ioChannelSupplier));
         setupDefaultPipeline();
+    }
+
+    public void setProvidedEventLoop(EventLoop providedEventLoop) {
+        this.providedEventLoop = providedEventLoop;
     }
 
     private void setupDefaultPipeline() {
@@ -195,9 +200,10 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
 
     private void registerParent() {
         if (!parent().isRegistered()) {
-            if (RakNetClientThreadedChannel.this.pendingEventLoop == null)
+            EventLoop loop = this.providedEventLoop != null ? this.providedEventLoop : this.pendingEventLoop;
+            if (loop == null)
                 throw new IllegalStateException("channel not registered");
-            RakNetClientThreadedChannel.this.pendingEventLoop.register(parent());
+            loop.register(parent());
         }
     }
 
