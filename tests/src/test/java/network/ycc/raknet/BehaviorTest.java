@@ -65,7 +65,7 @@ public class BehaviorTest {
 
         final Channel clientChannel = new Bootstrap()
                 .group(ioGroup)
-                .channel(RakNetClient.CHANNEL)
+                .channel(RakNetClient.THREADED_CHANNEL)
                 .handler(new EmptyInit())
                 .connect(localhost).sync().channel();
 
@@ -92,7 +92,7 @@ public class BehaviorTest {
 
         final ChannelFuture clientConnect = new Bootstrap()
                 .group(ioGroup)
-                .channel(RakNetClient.CHANNEL)
+                .channel(RakNetClient.THREADED_CHANNEL)
                 .option(RakNet.MAGIC, badMagic)
                 .handler(new EmptyInit())
                 .connect(localhost);
@@ -144,7 +144,7 @@ public class BehaviorTest {
 
         final ChannelFuture clientConnect = new Bootstrap()
                 .group(ioGroup)
-                .channel(RakNetClient.CHANNEL)
+                .channel(RakNetClient.THREADED_CHANNEL)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 500)
                 .handler(new EmptyInit())
                 .connect(localhost);
@@ -170,7 +170,7 @@ public class BehaviorTest {
 
         final ChannelFuture clientConnect = new Bootstrap()
                 .group(ioGroup)
-                .channel(RakNetClient.CHANNEL)
+                .channel(RakNetClient.THREADED_CHANNEL)
                 .option(RakNet.PROTOCOL_VERSION, 1)
                 .handler(new EmptyInit())
                 .connect(localhost);
@@ -197,7 +197,7 @@ public class BehaviorTest {
 
         final ChannelFuture clientConnect = new Bootstrap()
                 .group(ioGroup)
-                .channel(RakNetClient.CHANNEL)
+                .channel(RakNetClient.THREADED_CHANNEL)
                 .handler(new EmptyInit())
                 .connect(localhost);
 

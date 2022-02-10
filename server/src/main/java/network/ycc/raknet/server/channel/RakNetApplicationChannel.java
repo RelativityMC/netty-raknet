@@ -65,11 +65,12 @@ public class RakNetApplicationChannel extends AbstractChannel {
     }
 
     protected void doDisconnect() {
-        parent().close();
         close();
+        parent().close();
     }
 
     protected void doClose() {
+        close();
         parent().close();
     }
 

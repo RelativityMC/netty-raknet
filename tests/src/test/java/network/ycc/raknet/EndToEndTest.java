@@ -1,16 +1,5 @@
 package network.ycc.raknet;
 
-import network.ycc.raknet.channel.DatagramChannelProxy;
-import network.ycc.raknet.client.channel.RakNetClientChannel;
-import network.ycc.raknet.config.DefaultCodec;
-import network.ycc.raknet.frame.FrameData;
-import network.ycc.raknet.packet.FramedPacket;
-import network.ycc.raknet.packet.Ping;
-import network.ycc.raknet.pipeline.UserDataCodec;
-import network.ycc.raknet.server.channel.RakNetServerChannel;
-import network.ycc.raknet.utils.EmptyInit;
-import network.ycc.raknet.utils.MockDatagram;
-
 import io.netty.bootstrap.Bootstrap;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -29,6 +18,18 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.PromiseCombiner;
+import network.ycc.raknet.channel.DatagramChannelProxy;
+import network.ycc.raknet.client.channel.RakNetClientThreadedChannel;
+import network.ycc.raknet.config.DefaultCodec;
+import network.ycc.raknet.frame.FrameData;
+import network.ycc.raknet.packet.FramedPacket;
+import network.ycc.raknet.packet.Ping;
+import network.ycc.raknet.pipeline.UserDataCodec;
+import network.ycc.raknet.server.channel.RakNetServerChannel;
+import network.ycc.raknet.utils.EmptyInit;
+import network.ycc.raknet.utils.MockDatagram;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.util.Random;
@@ -36,9 +37,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
 public class EndToEndTest {
     final EventLoopGroup ioGroup = new NioEventLoopGroup();
@@ -107,7 +105,7 @@ public class EndToEndTest {
         Channel client = newClient(null, null);
 
         //add some bad frame data, should be ignore safely
-        client.pipeline().fireChannelRead(Unpooled.wrappedBuffer(
+        client.parent().pipeline().fireChannelRead(Unpooled.wrappedBuffer(
                 new byte[]{(byte) DefaultCodec.FRAME_DATA_START, 1, 2, 3, 4, 5, 6, 7, 8, 9}));
 
         client.pipeline().write(Unpooled.wrappedBuffer(new byte[bytesSent]));
@@ -198,7 +196,7 @@ public class EndToEndTest {
         Channel client = newClient(null, mockPair);
         ChannelPromise donePromise = client.newPromise();
 
-        client.pipeline()
+        client.parent().pipeline()
                 .addAfter(DatagramChannelProxy.LISTENER_HANDLER_NAME, "brutalizer", brutalizer);
         brutalizer.rnd = rnd;
         brutalizer.brutalizeRead = brutalizeRead;
@@ -302,7 +300,7 @@ public class EndToEndTest {
             throws InterruptedException {
         final Bootstrap bootstrap = new Bootstrap()
                 .group(ioGroup)
-                .channelFactory(() -> new RakNetClientChannel(() -> {
+                .channelFactory(() -> new RakNetClientThreadedChannel(() -> {
                     if (dgPair != null) {
                         return dgPair.client;
                     } else {

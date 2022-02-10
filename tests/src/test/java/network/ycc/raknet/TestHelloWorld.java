@@ -54,7 +54,7 @@ public class TestHelloWorld {
 
         final Channel clientChannel = new Bootstrap()
                 .group(ioGroup)
-                .channel(RakNetClient.CHANNEL)
+                .channel(RakNetClient.THREADED_CHANNEL)
                 .option(RakNet.MTU, 150) //can configure an initial MTU if desired (optional)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS,
                         5000) //supports most normal netty ChannelOptions (optional)
