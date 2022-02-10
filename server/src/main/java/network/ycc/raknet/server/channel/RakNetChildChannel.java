@@ -59,7 +59,7 @@ public class RakNetChildChannel extends AbstractChannel {
             protected void initChannel(RakNetChildChannel ch) {
                 pipeline().replace(ConnectionInitializer.NAME, ConnectionInitializer.NAME,
                         new ConnectionInitializer(connectPromise));
-                pipeline().addLast(new ReadHandler());
+                pipeline().addLast(RakNetApplicationChannel.NAME_SERVER_PARENT_THREADED_READ_HANDLER, new ReadHandler());
             }
         });
     }

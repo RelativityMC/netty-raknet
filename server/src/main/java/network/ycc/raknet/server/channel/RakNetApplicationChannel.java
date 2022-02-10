@@ -14,9 +14,12 @@ import java.net.SocketAddress;
 
 public class RakNetApplicationChannel extends AbstractChannel {
 
+    public static final String NAME_SERVER_THREADED_WRITE_HANDLER = "rn-server-threaded-write-handler";
+    public static final String NAME_SERVER_PARENT_THREADED_READ_HANDLER = "rn-server-parent-threaded-read-handler";
+
     protected RakNetApplicationChannel(RakNetChildChannel parent) {
         super(parent);
-        pipeline().addLast(new WriteHandler());
+        pipeline().addLast(NAME_SERVER_THREADED_WRITE_HANDLER, new WriteHandler());
     }
 
     @Override

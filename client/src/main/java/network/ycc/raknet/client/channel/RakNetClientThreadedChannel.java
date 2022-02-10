@@ -4,7 +4,6 @@ import io.netty.channel.AbstractChannel;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelId;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelMetadata;
@@ -13,13 +12,15 @@ import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
 import io.netty.channel.socket.DatagramChannel;
-import io.netty.util.concurrent.PromiseCombiner;
 import network.ycc.raknet.RakNet;
 
 import java.net.SocketAddress;
 import java.util.function.Supplier;
 
 public class RakNetClientThreadedChannel extends AbstractChannel {
+
+    public static final String NAME_CLIENT_THREADED_WRITE_HANDLER = "rn-client-threaded-write-handler";
+    public static final String NAME_CLIENT_PARENT_THREADED_READ_HANDLER = "rn-client-parent-threaded-read-handler";
 
     private EventLoop pendingEventLoop = null;
 
@@ -39,11 +40,11 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
     }
 
     private void setupDefaultPipeline() {
-        pipeline().addLast(new WriteHandler());
+        pipeline().addLast(NAME_CLIENT_THREADED_WRITE_HANDLER, new WriteHandler());
         parent().pipeline().addLast(new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel channel) {
-                channel.pipeline().addLast(new ParentReadHandler());
+                channel.pipeline().addLast(NAME_CLIENT_PARENT_THREADED_READ_HANDLER, new ParentReadHandler());
             }
         });
     }
