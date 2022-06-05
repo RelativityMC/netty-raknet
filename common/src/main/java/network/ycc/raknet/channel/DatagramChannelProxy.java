@@ -24,6 +24,7 @@ import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 
 import java.lang.reflect.InvocationTargetException;
+import java.net.NoRouteToHostException;
 import java.net.PortUnreachableException;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
@@ -334,7 +335,7 @@ public class DatagramChannelProxy implements Channel {
 
         @SuppressWarnings("deprecation")
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            if (cause instanceof PortUnreachableException) {
+            if (cause instanceof NoRouteToHostException) {
                 return;
             }
             ctx.fireExceptionCaught(cause);

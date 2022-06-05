@@ -5,7 +5,8 @@ import io.netty.buffer.ByteBuf;
 public class Disconnect extends SimpleFramedPacket {
 
     public Disconnect() {
-        reliability = Reliability.RELIABLE;
+        reliability = Reliability.RELIABLE_ORDERED;
+        orderChannel = 7;
     }
 
     @Override

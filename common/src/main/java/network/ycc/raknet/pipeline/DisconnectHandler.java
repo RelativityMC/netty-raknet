@@ -9,6 +9,7 @@ import io.netty.channel.ChannelPromise;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.ScheduledFuture;
 
+import java.net.SocketTimeoutException;
 import java.util.concurrent.TimeUnit;
 
 @ChannelHandler.Sharable
@@ -33,7 +34,10 @@ public class DisconnectHandler extends ChannelDuplexHandler {
         if (ctx.channel().isActive()) {
             final ChannelPromise disconnectPromise = ctx.newPromise();
             final ScheduledFuture<?> timeout = ctx.channel().eventLoop().schedule(
-                    () -> disconnectPromise.trySuccess(), 1, TimeUnit.SECONDS); //TODO: config
+                    () -> {
+                        disconnectPromise.trySuccess();
+                        throw new SocketTimeoutException();
+                    }, 3, TimeUnit.SECONDS); //TODO: config
             ctx.channel().writeAndFlush(new Disconnect())
                     .addListener(f -> disconnectPromise.trySuccess());
             disconnectPromise.addListener(f -> {
