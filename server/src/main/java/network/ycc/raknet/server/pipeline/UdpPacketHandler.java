@@ -26,7 +26,7 @@ public abstract class UdpPacketHandler<T extends Packet> extends
         this.type = type;
     }
 
-    protected abstract void handle(ChannelHandlerContext ctx, InetSocketAddress sender, T packet);
+    protected abstract void handle(ChannelHandlerContext ctx, InetSocketAddress sender, InetSocketAddress recipient, T packet);
 
     @Override
     public void handlerAdded(ChannelHandlerContext ctx) {
@@ -51,7 +51,7 @@ public abstract class UdpPacketHandler<T extends Packet> extends
         final RakNet.Config config = RakNet.config(ctx);
         final T packet = (T) config.getCodec().decode(msg.content());
         try {
-            handle(ctx, msg.sender(), packet);
+            handle(ctx, msg.sender(), msg.recipient(), packet);
         } finally {
             ReferenceCountUtil.release(packet);
         }

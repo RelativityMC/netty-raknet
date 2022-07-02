@@ -1,7 +1,6 @@
 package network.ycc.raknet.server.pipeline;
 
 import network.ycc.raknet.RakNet;
-import network.ycc.raknet.packet.ConnectionReply1;
 import network.ycc.raknet.packet.ConnectionRequest1;
 import network.ycc.raknet.packet.InvalidVersion;
 import network.ycc.raknet.packet.Packet;
@@ -23,12 +22,12 @@ public class ConnectionListener extends UdpPacketHandler<ConnectionRequest1> {
     }
 
     @SuppressWarnings("unchecked")
-    protected void handle(ChannelHandlerContext ctx, InetSocketAddress sender, ConnectionRequest1 request) {
+    protected void handle(ChannelHandlerContext ctx, InetSocketAddress sender, InetSocketAddress recipient, ConnectionRequest1 request) {
         final RakNet.Config config = RakNet.config(ctx);
         if (config.containsProtocolVersion(request.getProtocolVersion())) {
             ReferenceCountUtil.retain(request);
             //use connect to create a new child for this remote address
-            ctx.channel().connect(sender).addListeners(
+            ctx.channel().connect(sender, recipient).addListeners(
                     ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE,
                     future -> {
                         if (future.isSuccess()) {

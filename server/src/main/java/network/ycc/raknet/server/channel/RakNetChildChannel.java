@@ -3,7 +3,6 @@ package network.ycc.raknet.server.channel;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.util.concurrent.PromiseCombiner;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.config.DefaultConfig;
 import network.ycc.raknet.server.RakNetServer;
@@ -30,13 +29,15 @@ public class RakNetChildChannel extends AbstractChannel {
     protected final ChannelPromise closePromise;
     protected final RakNet.Config config;
     protected final InetSocketAddress remoteAddress;
+    protected final InetSocketAddress localAddress;
     protected final RakNetApplicationChannel applicationChannel;
 
     protected volatile boolean open = true;
 
-    public RakNetChildChannel(Channel parent, InetSocketAddress remoteAddress) {
+    public RakNetChildChannel(Channel parent, InetSocketAddress remoteAddress, InetSocketAddress localAddress) {
         super(parent);
         this.remoteAddress = remoteAddress;
+        this.localAddress = localAddress;
         config = new DefaultConfig(this);
         connectPromise = newPromise();
         closePromise = newPromise();
@@ -102,7 +103,7 @@ public class RakNetChildChannel extends AbstractChannel {
     }
 
     protected SocketAddress localAddress0() {
-        return parent().localAddress();
+        return localAddress;
     }
 
     protected SocketAddress remoteAddress0() {
@@ -157,7 +158,7 @@ public class RakNetChildChannel extends AbstractChannel {
             if (msg instanceof ByteBuf) {
                 needsFlush = true;
                 promise.trySuccess();
-                parent().write(new DatagramPacket((ByteBuf) msg, remoteAddress))
+                parent().write(new DatagramPacket((ByteBuf) msg, remoteAddress, localAddress))
                         .addListener(RakNet.INTERNAL_WRITE_LISTENER);
             } else {
                 ctx.write(msg, promise);

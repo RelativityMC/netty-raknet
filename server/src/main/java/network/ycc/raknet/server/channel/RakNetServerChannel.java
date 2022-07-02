@@ -72,8 +72,8 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
         return new ServerHandler();
     }
 
-    protected RakNetChildChannel newChild(InetSocketAddress remoteAddress) {
-        return new RakNetChildChannel(this, remoteAddress);
+    protected RakNetChildChannel newChild(InetSocketAddress remoteAddress, InetSocketAddress localAddress) {
+        return new RakNetChildChannel(this, remoteAddress, localAddress);
     }
 
     protected void removeChild(SocketAddress remoteAddress, RakNetChildChannel child) {
@@ -97,6 +97,10 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
                     throw new IllegalArgumentException(
                             "Provided remote address is not an InetSocketAddress");
                 }
+                if (!(localAddress instanceof InetSocketAddress)) {
+                    throw new IllegalArgumentException(
+                            "Provided local address is not an InetSocketAddress");
+                }
                 final Channel existingChild = getChildChannel(remoteAddress);
                 if (childMap.size() > config.getMaxConnections() && existingChild == null) {
                     final Packet packet = new NoFreeConnections(
@@ -112,7 +116,7 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
                     }
                     promise.tryFailure(new IllegalStateException("Too many connections"));
                 } else if (existingChild == null) {
-                    final RakNetChildChannel child = newChild((InetSocketAddress) remoteAddress);
+                    final RakNetChildChannel child = newChild((InetSocketAddress) remoteAddress, (InetSocketAddress) localAddress);
                     child.closeFuture().addListener(v ->
                             eventLoop().execute(() -> removeChild(remoteAddress, child))
                     );
