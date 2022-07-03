@@ -145,6 +145,9 @@ public class RakNet {
 
         boolean isNACKEnabled();
         void setNACKEnabled(boolean value);
+
+        boolean isNoDelayEnabled();
+        void setNoDelayEnabled(boolean value);
     }
 
     public interface Codec {

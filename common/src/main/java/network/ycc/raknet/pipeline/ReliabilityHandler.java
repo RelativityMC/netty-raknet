@@ -214,14 +214,18 @@ public class ReliabilityHandler extends ChannelDuplexHandler {
     }
 
     protected void updateBurstTokens(int nTicks) {
-        //gradual increment or decrement for burst tokens, unless unused
-        final boolean burstUnused = pendingFrameSets.size() < burstTokens / 2;
-        if (resendGauge > 1 && !burstUnused) {
-            burstTokens += 1 * nTicks;
-        } else if (resendGauge < -1 || burstUnused) {
-            burstTokens -= 3 * nTicks;
+        if (config.isNoDelayEnabled()) {
+            burstTokens = Math.max(0, config.getMaxPendingFrameSets());
+        } else {
+            // gradual increment or decrement for burst tokens, unless unused
+            final boolean burstUnused = pendingFrameSets.size() < burstTokens / 2;
+            if (resendGauge > 1 && !burstUnused) {
+                burstTokens += 1 * nTicks;
+            } else if (resendGauge < -1 || burstUnused) {
+                burstTokens -= 3 * nTicks;
+            }
+            burstTokens = Math.max(Math.min(burstTokens, config.getMaxPendingFrameSets()), 0);
         }
-        burstTokens = Math.max(Math.min(burstTokens, config.getMaxPendingFrameSets()), 0);
         config.getMetrics().measureBurstTokens(burstTokens);
     }
 

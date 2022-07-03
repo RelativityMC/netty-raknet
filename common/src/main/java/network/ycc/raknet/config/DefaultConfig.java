@@ -39,6 +39,7 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
     private volatile int protocolVersion = 9;
     private volatile boolean ignoreResendGauge = false;
     private volatile boolean NACKEnabled = true;
+    private volatile boolean noDelay = false;
 
     public DefaultConfig(Channel channel) {
         super(channel);
@@ -256,5 +257,15 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
     @Override
     public void setNACKEnabled(boolean NACKEnabled) {
         this.NACKEnabled = NACKEnabled;
+    }
+
+    @Override
+    public boolean isNoDelayEnabled() {
+        return noDelay;
+    }
+
+    @Override
+    public void setNoDelayEnabled(boolean value) {
+        this.noDelay = value;
     }
 }
