@@ -1,8 +1,5 @@
 package network.ycc.raknet.channel;
 
-import network.ycc.raknet.RakNet;
-import network.ycc.raknet.config.DefaultConfig;
-
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -22,10 +19,11 @@ import io.netty.handler.flush.FlushConsolidationHandler;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
+import network.ycc.raknet.RakNet;
+import network.ycc.raknet.config.DefaultConfig;
 
 import java.lang.reflect.InvocationTargetException;
 import java.net.NoRouteToHostException;
-import java.net.PortUnreachableException;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.function.Supplier;

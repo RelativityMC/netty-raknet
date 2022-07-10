@@ -68,7 +68,7 @@ public abstract class AbstractConnectionInitializer extends SimpleChannelInbound
     }
 
     protected void doTimeout() {
-        fail(new ConnectTimeoutException());
+        fail(new ConnectTimeoutException("connection timed out"));
     }
 
     protected enum State {
