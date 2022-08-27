@@ -5,6 +5,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.config.DefaultConfig;
+import network.ycc.raknet.pipeline.FlushTickHandler;
 import network.ycc.raknet.server.RakNetServer;
 import network.ycc.raknet.server.pipeline.ConnectionInitializer;
 
@@ -21,6 +22,10 @@ import io.netty.channel.socket.DatagramPacket;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Objects;
+import java.util.concurrent.locks.LockSupport;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class RakNetChildChannel extends AbstractChannel {
 
@@ -31,13 +36,15 @@ public class RakNetChildChannel extends AbstractChannel {
     protected final InetSocketAddress remoteAddress;
     protected final InetSocketAddress localAddress;
     protected final RakNetApplicationChannel applicationChannel;
+    protected final Consumer<Channel> registerChannel;
 
     protected volatile boolean open = true;
 
-    public RakNetChildChannel(Channel parent, InetSocketAddress remoteAddress, InetSocketAddress localAddress) {
+    public RakNetChildChannel(Channel parent, InetSocketAddress remoteAddress, InetSocketAddress localAddress, Consumer<Channel> registerChannel) {
         super(parent);
         this.remoteAddress = remoteAddress;
         this.localAddress = localAddress;
+        this.registerChannel = Objects.requireNonNull(registerChannel);
         config = new DefaultConfig(this);
         connectPromise = newPromise();
         closePromise = newPromise();
@@ -63,6 +70,16 @@ public class RakNetChildChannel extends AbstractChannel {
                 pipeline().addLast(RakNetApplicationChannel.NAME_SERVER_PARENT_THREADED_READ_HANDLER, new ReadHandler());
             }
         });
+    }
+
+    protected void registerApplicationChannelIfNecessary() {
+        if (!this.applicationChannel.isRegistered()) {
+//            new Throwable().printStackTrace();
+            registerChannel.accept(this.applicationChannel);
+            while (!this.applicationChannel.isRegistered()) {
+                LockSupport.parkNanos(1_000_000);
+            }
+        }
     }
 
     public ChannelFuture connectFuture() {
@@ -183,36 +200,44 @@ public class RakNetChildChannel extends AbstractChannel {
 
         @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
+            registerApplicationChannelIfNecessary();
             applicationChannel.pipeline().fireChannelActive();
         }
 
         @Override
         public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            registerApplicationChannelIfNecessary();
             applicationChannel.pipeline().fireChannelInactive();
         }
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            registerApplicationChannelIfNecessary();
             applicationChannel.pipeline().fireChannelRead(msg);
         }
 
         @Override
         public void channelReadComplete(ChannelHandlerContext ctx) {
+            if (!applicationChannel.isRegistered()) return;
             applicationChannel.pipeline().fireChannelReadComplete();
         }
 
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
+            if (evt == FlushTickHandler.FLUSH_CHECK_SIGNAL || evt instanceof FlushTickHandler.MissedFlushes) return;
+            registerApplicationChannelIfNecessary();
             applicationChannel.pipeline().fireUserEventTriggered(evt);
         }
 
         @Override
         public void channelWritabilityChanged(ChannelHandlerContext ctx) {
+            registerApplicationChannelIfNecessary();
             applicationChannel.pipeline().fireChannelWritabilityChanged();
         }
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            registerApplicationChannelIfNecessary();
             applicationChannel.pipeline().fireExceptionCaught(cause);
         }
     }

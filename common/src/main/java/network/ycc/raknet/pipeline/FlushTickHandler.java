@@ -19,7 +19,7 @@ public class FlushTickHandler extends ChannelDuplexHandler {
     public static final long TICK_RESOLUTION = TimeUnit.NANOSECONDS.convert(5, TimeUnit.MILLISECONDS);
 
     /** Fired near the end of a pipeline to trigger a flush check. */
-    protected static final Object FLUSH_CHECK_SIGNAL = new Object();
+    public static final Object FLUSH_CHECK_SIGNAL = new Object();
 
     protected long tickAccum = 0;
     protected long lastTickAccum = System.nanoTime();

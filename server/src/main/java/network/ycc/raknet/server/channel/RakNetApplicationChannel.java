@@ -103,13 +103,17 @@ public class RakNetApplicationChannel extends AbstractChannel {
 
     @Override
     public ChannelFuture close() {
-        final ChannelFuture close = super.close();
-        final ChannelPromise promise = newPromise();
-        close.addListener(future -> parent().close().addListener(future1 -> {
-            if (future1.isSuccess()) promise.setSuccess();
-            else promise.setFailure(future1.cause());
-        }));
-        return promise;
+        if (this.isRegistered()) {
+            final ChannelFuture close = super.close();
+            final ChannelPromise promise = newPromise();
+            close.addListener(future -> parent().close().addListener(future1 -> {
+                if (future1.isSuccess()) promise.setSuccess();
+                else promise.setFailure(future1.cause());
+            }));
+            return promise;
+        } else {
+            return parent().close();
+        }
     }
 
     protected class WriteHandler extends ChannelOutboundHandlerAdapter {

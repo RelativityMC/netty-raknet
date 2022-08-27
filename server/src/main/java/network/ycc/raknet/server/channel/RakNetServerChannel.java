@@ -1,5 +1,6 @@
 package network.ycc.raknet.server.channel;
 
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.channel.DatagramChannelProxy;
@@ -25,6 +26,8 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class RakNetServerChannel extends DatagramChannelProxy implements ServerChannel {
@@ -72,8 +75,8 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
         return new ServerHandler();
     }
 
-    protected RakNetChildChannel newChild(InetSocketAddress remoteAddress, InetSocketAddress localAddress) {
-        return new RakNetChildChannel(this, remoteAddress, localAddress);
+    protected RakNetChildChannel newChild(InetSocketAddress remoteAddress, InetSocketAddress localAddress, Consumer<Channel> registerChannel) {
+        return new RakNetChildChannel(this, remoteAddress, localAddress, registerChannel);
     }
 
     protected void removeChild(SocketAddress remoteAddress, RakNetChildChannel child) {
@@ -116,13 +119,15 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
                     }
                     promise.tryFailure(new IllegalStateException("Too many connections"));
                 } else if (existingChild == null) {
-                    final RakNetChildChannel child = newChild((InetSocketAddress) remoteAddress, (InetSocketAddress) localAddress);
+                    final RakNetChildChannel child = newChild((InetSocketAddress) remoteAddress, (InetSocketAddress) localAddress, channel -> {
+                        pipeline().fireChannelRead(channel).fireChannelReadComplete(); //register
+                    });
                     child.closeFuture().addListener(v ->
                             eventLoop().execute(() -> removeChild(remoteAddress, child))
                     );
                     child.config().setOption(RakNet.SERVER_ID, config.getServerId());
                     initChildChannel(child);
-                    pipeline().fireChannelRead(child.applicationChannel).fireChannelReadComplete(); //register
+//                    pipeline().fireChannelRead(child.applicationChannel).fireChannelReadComplete(); //register
                     addChild(remoteAddress, child);
                     promise.trySuccess();
                 } else {
@@ -163,13 +168,13 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
         }
 
         @SuppressWarnings("unchecked")
-        private void initChildChannel(RakNetChildChannel child) {
+        private ChannelFuture initChildChannel(Channel child) {
             try {
                 final Class<? extends ChannelHandler> acceptorClass = (Class<? extends ChannelHandler>) Class.forName("io.netty.bootstrap.ServerBootstrap$ServerBootstrapAcceptor");
                 final Field childGroupField = acceptorClass.getDeclaredField("childGroup");
                 childGroupField.setAccessible(true);
                 final EventLoopGroup childGroup = (EventLoopGroup) childGroupField.get(pipeline().get(acceptorClass));
-                childGroup.register(child);
+                return childGroup.register(child);
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }
