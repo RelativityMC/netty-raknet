@@ -22,7 +22,10 @@ import io.netty.channel.socket.DatagramPacket;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.LinkedList;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -36,6 +39,8 @@ public class RakNetChildChannel extends AbstractChannel {
     protected final InetSocketAddress remoteAddress;
     protected final InetSocketAddress localAddress;
     protected final RakNetApplicationChannel applicationChannel;
+    protected final AtomicBoolean isRegisteringApplicationChannel = new AtomicBoolean(false);
+    protected final Queue<Runnable> pendingApplicationChannelOperations = new LinkedList<>();
     protected final Consumer<Channel> registerChannel;
 
     protected volatile boolean open = true;
@@ -74,10 +79,17 @@ public class RakNetChildChannel extends AbstractChannel {
 
     protected void registerApplicationChannelIfNecessary() {
         if (!this.applicationChannel.isRegistered()) {
-//            new Throwable().printStackTrace();
-            registerChannel.accept(this.applicationChannel);
-            while (!this.applicationChannel.isRegistered()) {
-                LockSupport.parkNanos(1_000_000);
+            if (isRegisteringApplicationChannel.compareAndSet(false, true)) {
+                registerChannel.accept(this.applicationChannel);
+            }
+        } else if (!pendingApplicationChannelOperations.isEmpty()) {
+            Runnable r;
+            while ((r = pendingApplicationChannelOperations.poll()) != null) {
+                try {
+                    r.run();
+                } catch (Throwable t) {
+                    t.printStackTrace();
+                }
             }
         }
     }
@@ -201,19 +213,31 @@ public class RakNetChildChannel extends AbstractChannel {
         @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
             registerApplicationChannelIfNecessary();
-            applicationChannel.pipeline().fireChannelActive();
+            if (applicationChannel.isRegistered()) {
+                applicationChannel.pipeline().fireChannelActive();
+            } else {
+                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelActive());
+            }
         }
 
         @Override
         public void channelInactive(ChannelHandlerContext ctx) throws Exception {
             registerApplicationChannelIfNecessary();
-            applicationChannel.pipeline().fireChannelInactive();
+            if (applicationChannel.isRegistered()) {
+                applicationChannel.pipeline().fireChannelInactive();
+            } else {
+                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelInactive());
+            }
         }
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
             registerApplicationChannelIfNecessary();
-            applicationChannel.pipeline().fireChannelRead(msg);
+            if (applicationChannel.isRegistered()) {
+                applicationChannel.pipeline().fireChannelRead(msg);
+            } else {
+                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelRead(msg));
+            }
         }
 
         @Override
@@ -224,21 +248,38 @@ public class RakNetChildChannel extends AbstractChannel {
 
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
-            if (evt == FlushTickHandler.FLUSH_CHECK_SIGNAL || evt instanceof FlushTickHandler.MissedFlushes) return;
+            if (applicationChannel.isRegistered()) {
+                registerApplicationChannelIfNecessary();
+            }
+            if (evt == FlushTickHandler.FLUSH_CHECK_SIGNAL || evt instanceof FlushTickHandler.MissedFlushes) {
+                return;
+            }
             registerApplicationChannelIfNecessary();
-            applicationChannel.pipeline().fireUserEventTriggered(evt);
+            if (applicationChannel.isRegistered()) {
+                applicationChannel.pipeline().fireUserEventTriggered(evt);
+            } else {
+                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireUserEventTriggered(evt));
+            }
         }
 
         @Override
         public void channelWritabilityChanged(ChannelHandlerContext ctx) {
             registerApplicationChannelIfNecessary();
-            applicationChannel.pipeline().fireChannelWritabilityChanged();
+            if (applicationChannel.isRegistered()) {
+                applicationChannel.pipeline().fireChannelWritabilityChanged();
+            } else {
+                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelWritabilityChanged());
+            }
         }
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
             registerApplicationChannelIfNecessary();
-            applicationChannel.pipeline().fireExceptionCaught(cause);
+            if (applicationChannel.isRegistered()) {
+                applicationChannel.pipeline().fireExceptionCaught(cause);
+            } else {
+                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireExceptionCaught(cause));
+            }
         }
     }
 
