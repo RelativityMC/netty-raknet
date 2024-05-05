@@ -38,7 +38,7 @@ public class DefaultConfig extends DefaultChannelConfig implements RakNet.Config
     private volatile int maxConnections = 2048;
     private volatile int protocolVersion = 9;
     private volatile boolean ignoreResendGauge = false;
-    private volatile boolean NACKEnabled = true;
+    private volatile boolean NACKEnabled = false;
     private volatile boolean noDelay = false;
 
     public DefaultConfig(Channel channel) {
