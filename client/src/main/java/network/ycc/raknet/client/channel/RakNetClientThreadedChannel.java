@@ -8,9 +8,9 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelMetadata;
 import io.netty.channel.ChannelOutboundBuffer;
-import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
+import io.netty.channel.RecvByteBufAllocator;
 import io.netty.channel.socket.DatagramChannel;
 import network.ycc.raknet.RakNet;
 
@@ -19,7 +19,6 @@ import java.util.function.Supplier;
 
 public class RakNetClientThreadedChannel extends AbstractChannel {
 
-    public static final String NAME_CLIENT_THREADED_WRITE_HANDLER = "rn-client-threaded-write-handler";
     public static final String NAME_CLIENT_PARENT_THREADED_READ_HANDLER = "rn-client-parent-threaded-read-handler";
 
     private EventLoop providedEventLoop = null;
@@ -45,7 +44,6 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
     }
 
     private void setupDefaultPipeline() {
-        pipeline().addLast(NAME_CLIENT_THREADED_WRITE_HANDLER, new WriteHandler());
         parent().pipeline().addLast(new ChannelInitializer<Channel>() {
             @Override
             protected void initChannel(Channel channel) {
@@ -75,12 +73,14 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
         return (RakNetClientChannel) super.parent();
     }
 
+    @Override
     protected AbstractUnsafe newUnsafe() {
-        return new AbstractUnsafe() {
-            public void connect(SocketAddress addr1, SocketAddress addr2, ChannelPromise pr) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return new RakNetClientThreadedChannelUnsafe();
+    }
+
+    @Override
+    public Unsafe unsafe() {
+        return ((RakNetClientThreadedChannelUnsafe) super.unsafe()).wrapped;
     }
 
     protected boolean isCompatible(EventLoop eventloop) {
@@ -134,66 +134,110 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
         return parent().metadata();
     }
 
-    @Override
-    public ChannelFuture close() {
-        final ChannelFuture close = super.close();
-        final ChannelPromise promise = newPromise();
-        close.addListener(future -> parent().close().addListener(future1 -> {
-            if (future1.isSuccess()) promise.setSuccess();
-            else promise.setFailure(future1.cause());
-        }));
-        return promise;
-    }
+    protected final class RakNetClientThreadedChannelUnsafe extends AbstractUnsafe {
 
-    protected class WriteHandler extends ChannelOutboundHandlerAdapter {
+        // intercept calls
+        final Unsafe wrapped = new Unsafe() {
+            @SuppressWarnings("deprecation")
+            @Override
+            public RecvByteBufAllocator.Handle recvBufAllocHandle() {
+                return RakNetClientThreadedChannelUnsafe.this.recvBufAllocHandle();
+            }
+
+            @Override
+            public SocketAddress localAddress() {
+                return RakNetClientThreadedChannelUnsafe.this.localAddress();
+            }
+
+            @Override
+            public SocketAddress remoteAddress() {
+                return RakNetClientThreadedChannelUnsafe.this.remoteAddress();
+            }
+
+            @Override
+            public void register(EventLoop eventLoop, ChannelPromise promise) {
+                RakNetClientThreadedChannelUnsafe.this.register(eventLoop, promise);
+            }
+
+            @Override
+            public void bind(SocketAddress localAddress, ChannelPromise promise) {
+                registerParent();
+                final ChannelFuture future = parent().bind(localAddress);
+                future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
+                future.addListener(future1 -> {
+                    if (future1.isSuccess()) promise.trySuccess();
+                    else promise.tryFailure(future1.cause());
+                });
+            }
+
+            @Override
+            public void connect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
+                RakNetClientThreadedChannelUnsafe.this.connect(remoteAddress, localAddress, promise);
+            }
+
+            @Override
+            public void disconnect(ChannelPromise promise) {
+                RakNetClientThreadedChannelUnsafe.this.disconnect(promise);
+            }
+
+            @Override
+            public void close(ChannelPromise promise) {
+                parent().close().addListener(future -> {
+                    if (future.isSuccess()) promise.trySuccess();
+                    else promise.tryFailure(future.cause());
+                });
+            }
+
+            @Override
+            public void closeForcibly() {
+                RakNetClientThreadedChannelUnsafe.this.closeForcibly();
+            }
+
+            @Override
+            public void deregister(ChannelPromise promise) {
+                RakNetClientThreadedChannelUnsafe.this.deregister(promise);
+            }
+
+            @Override
+            public void beginRead() {
+                RakNetClientThreadedChannelUnsafe.this.beginRead();
+            }
+
+            @Override
+            public void write(Object msg, ChannelPromise promise) {
+                // we don't use ChannelOutboundBuffer
+                final ChannelFuture future = parent().write(msg);
+                future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
+                future.addListener(future1 -> {
+                    if (future1.isSuccess()) promise.trySuccess();
+                    else promise.tryFailure(future1.cause());
+                });
+            }
+
+            @Override
+            public void flush() {
+                parent().flush();
+            }
+
+            @Override
+            public ChannelPromise voidPromise() {
+                return RakNetClientThreadedChannelUnsafe.this.voidPromise();
+            }
+
+            @Override
+            public ChannelOutboundBuffer outboundBuffer() {
+                return RakNetClientThreadedChannelUnsafe.this.outboundBuffer();
+            }
+        };
 
         @Override
-        public void bind(ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) throws Exception {
-            registerParent();
-            final ChannelFuture future = parent().bind(localAddress);
-            future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
-            future.addListener(future1 -> {
-                if (future1.isSuccess()) promise.trySuccess();
-                else promise.tryFailure(future1.cause());
-            });
-        }
-
-        @Override
-        public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) throws Exception {
+        public void connect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
             registerParent();
             final ChannelFuture future = parent().connect(remoteAddress, localAddress);
             future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
             future.addListener(future1 -> {
                 if (future1.isSuccess()) promise.trySuccess();
                 else promise.tryFailure(future1.cause());
-            });
-        }
-
-        @Override
-        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-            final ChannelFuture future = parent().write(msg);
-            future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
-            future.addListener(future1 -> {
-                if (future1.isSuccess()) promise.trySuccess();
-                else promise.tryFailure(future1.cause());
-            });
-        }
-
-        @Override
-        public void flush(ChannelHandlerContext ctx) {
-            parent().flush();
-        }
-
-        @Override
-        public void read(ChannelHandlerContext ctx) {
-            // NOOP
-        }
-
-        @Override
-        public void close(ChannelHandlerContext ctx, ChannelPromise promise) {
-            parent().close().addListener(future -> {
-                if (future.isSuccess()) promise.trySuccess();
-                else promise.tryFailure(future.cause());
             });
         }
     }

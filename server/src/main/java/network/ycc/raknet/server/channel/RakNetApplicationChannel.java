@@ -8,18 +8,17 @@ import io.netty.channel.ChannelOutboundBuffer;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
+import io.netty.channel.RecvByteBufAllocator;
 import network.ycc.raknet.RakNet;
 
 import java.net.SocketAddress;
 
 public class RakNetApplicationChannel extends AbstractChannel {
 
-    public static final String NAME_SERVER_THREADED_WRITE_HANDLER = "rn-server-threaded-write-handler";
     public static final String NAME_SERVER_PARENT_THREADED_READ_HANDLER = "rn-server-parent-threaded-read-handler";
 
     protected RakNetApplicationChannel(RakNetChildChannel parent) {
         super(parent);
-        pipeline().addLast(NAME_SERVER_THREADED_WRITE_HANDLER, new WriteHandler());
     }
 
     @Override
@@ -43,12 +42,14 @@ public class RakNetApplicationChannel extends AbstractChannel {
         return (RakNetChildChannel) super.parent();
     }
 
+    @Override
     protected AbstractUnsafe newUnsafe() {
-        return new AbstractUnsafe() {
-            public void connect(SocketAddress addr1, SocketAddress addr2, ChannelPromise pr) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        return new RakNetApplicationChannelUnsafe();
+    }
+
+    @Override
+    public Unsafe unsafe() {
+        return ((RakNetApplicationChannelUnsafe) super.unsafe()).wrapped;
     }
 
     protected boolean isCompatible(EventLoop eventloop) {
@@ -104,46 +105,105 @@ public class RakNetApplicationChannel extends AbstractChannel {
     @Override
     public ChannelFuture close() {
         if (this.isRegistered()) {
-            final ChannelFuture close = super.close();
-            final ChannelPromise promise = newPromise();
-            close.addListener(future -> parent().close().addListener(future1 -> {
-                if (future1.isSuccess()) promise.setSuccess();
-                else promise.setFailure(future1.cause());
-            }));
-            return promise;
+            return super.close();
         } else {
             return parent().close();
         }
     }
 
-    protected class WriteHandler extends ChannelOutboundHandlerAdapter {
+    protected final class RakNetApplicationChannelUnsafe extends AbstractUnsafe {
+
+        // intercept calls
+        final Unsafe wrapped = new Unsafe() {
+            @SuppressWarnings("deprecation")
+            @Override
+            public RecvByteBufAllocator.Handle recvBufAllocHandle() {
+                return RakNetApplicationChannelUnsafe.this.recvBufAllocHandle();
+            }
+
+            @Override
+            public SocketAddress localAddress() {
+                return RakNetApplicationChannelUnsafe.this.localAddress();
+            }
+
+            @Override
+            public SocketAddress remoteAddress() {
+                return RakNetApplicationChannelUnsafe.this.remoteAddress();
+            }
+
+            @Override
+            public void register(EventLoop eventLoop, ChannelPromise promise) {
+                RakNetApplicationChannelUnsafe.this.register(eventLoop, promise);
+            }
+
+            @Override
+            public void bind(SocketAddress localAddress, ChannelPromise promise) {
+                RakNetApplicationChannelUnsafe.this.bind(localAddress, promise);
+            }
+
+            @Override
+            public void connect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
+                RakNetApplicationChannelUnsafe.this.connect(remoteAddress, localAddress, promise);
+            }
+
+            @Override
+            public void disconnect(ChannelPromise promise) {
+                RakNetApplicationChannelUnsafe.this.disconnect(promise);
+            }
+
+            @Override
+            public void close(ChannelPromise promise) {
+                parent().close().addListener(future -> {
+                    if (future.isSuccess()) promise.trySuccess();
+                    else promise.tryFailure(future.cause());
+                });
+            }
+
+            @Override
+            public void closeForcibly() {
+                RakNetApplicationChannelUnsafe.this.closeForcibly();
+            }
+
+            @Override
+            public void deregister(ChannelPromise promise) {
+                RakNetApplicationChannelUnsafe.this.deregister(promise);
+            }
+
+            @Override
+            public void beginRead() {
+                RakNetApplicationChannelUnsafe.this.beginRead();
+            }
+
+            @Override
+            public void write(Object msg, ChannelPromise promise) {
+                // we don't use ChannelOutboundBuffer
+                final ChannelFuture future = parent().write(msg);
+                future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
+                future.addListener(future1 -> {
+                    if (future1.isSuccess()) promise.trySuccess();
+                    else promise.tryFailure(future1.cause());
+                });
+            }
+
+            @Override
+            public void flush() {
+                parent().flush();
+            }
+
+            @Override
+            public ChannelPromise voidPromise() {
+                return RakNetApplicationChannelUnsafe.this.voidPromise();
+            }
+
+            @Override
+            public ChannelOutboundBuffer outboundBuffer() {
+                return RakNetApplicationChannelUnsafe.this.outboundBuffer();
+            }
+        };
 
         @Override
-        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-            final ChannelFuture future = parent().write(msg);
-            future.addListener(RakNet.INTERNAL_WRITE_LISTENER);
-            future.addListener(future1 -> {
-                if (future1.isSuccess()) promise.trySuccess();
-                else promise.tryFailure(future1.cause());
-            });
-        }
-
-        @Override
-        public void flush(ChannelHandlerContext ctx) {
-            parent().flush();
-        }
-
-        @Override
-        public void read(ChannelHandlerContext ctx) {
-            // NOOP
-        }
-
-        @Override
-        public void close(ChannelHandlerContext ctx, ChannelPromise promise) {
-            parent().close().addListener(future -> {
-                if (future.isSuccess()) promise.trySuccess();
-                else promise.tryFailure(future.cause());
-            });
+        public void connect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
+            throw new UnsupportedOperationException();
         }
     }
 
