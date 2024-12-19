@@ -9,6 +9,8 @@ plugins {
 dependencies {
     api project(':netty-raknet-client')
     api project(':netty-raknet-server')
+    compileOnly libs.io.netty.netty.all
+    testImplementation libs.io.netty.netty.all
     testImplementation libs.org.mockito.mockito.core
 }
 

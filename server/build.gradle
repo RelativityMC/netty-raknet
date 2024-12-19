@@ -8,6 +8,7 @@ plugins {
 
 dependencies {
     api project(':netty-raknet-common')
+    compileOnly libs.io.netty.netty.all
 }
 
 description = 'Netty RakNet - Server'

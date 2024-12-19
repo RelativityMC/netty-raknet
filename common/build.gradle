@@ -9,7 +9,7 @@ plugins {
 dependencies {
     api libs.it.unimi.dsi.fastutil
     api libs.org.apache.commons.commons.math3
-    api libs.io.netty.netty.all
+    compileOnly libs.io.netty.netty.all
 }
 
 description = 'Netty RakNet - Common'
