@@ -1,7 +1,10 @@
 package network.ycc.raknet.server.channel;
 
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoop;
 import io.netty.channel.EventLoopGroup;
+import io.netty.util.AttributeKey;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.channel.DatagramChannelProxy;
 import network.ycc.raknet.packet.NoFreeConnections;
@@ -34,6 +37,9 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
 
     protected final Map<SocketAddress, RakNetChildChannel> childMap = new HashMap<>();
 
+    private ChannelParameters channelParameters;
+    private EventLoop providedApplicationEventLoop = null;
+
     public RakNetServerChannel() {
         this(NioDatagramChannel.class);
     }
@@ -54,6 +60,24 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
         }
 
         return childMap.get(addr);
+    }
+
+    /**
+     * Sets an alternative event loop used for application channels.
+     * The specified event loop does not have to be compatible with the IO used for the server.
+     *
+     * @param providedApplicationEventLoop the event loop
+     */
+    public void setProvidedApplicationEventLoop(EventLoop providedApplicationEventLoop) {
+        this.providedApplicationEventLoop = providedApplicationEventLoop;
+    }
+
+    ChannelParameters getChannelParameters() {
+        ChannelParameters parameters = this.channelParameters;
+        if (parameters == null) {
+            parameters = this.channelParameters = new ChannelParameters();
+        }
+        return parameters;
     }
 
     @Override
@@ -125,7 +149,15 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
                     promise.tryFailure(new IllegalStateException("Too many connections"));
                 } else if (existingChild == null) {
                     final RakNetChildChannel child = newChild((InetSocketAddress) remoteAddress, (InetSocketAddress) localAddress, channel -> {
-                        pipeline().fireChannelRead(channel).fireChannelReadComplete(); //register
+                        EventLoop applicationEventLoop = providedApplicationEventLoop;
+                        if (applicationEventLoop != null) {
+                            ChannelParameters parameters = getChannelParameters();
+                            channel.pipeline().addLast(parameters.childHandler);
+                            ChannelUtil.applyChannelParameters(channel, parameters);
+                            applicationEventLoop.register(channel);
+                        } else {
+                            pipeline().fireChannelRead(channel).fireChannelReadComplete(); // register
+                        }
                     });
                     child.closeFuture().addListener(v ->
                             eventLoop().execute(() -> removeChild(remoteAddress, child))
@@ -172,14 +204,46 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
             ctx.fireChannelWritabilityChanged();
         }
 
-        @SuppressWarnings("unchecked")
         private ChannelFuture initChildChannel(Channel child) {
+            return getChannelParameters().childGroup.register(child);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    class ChannelParameters {
+        final EventLoopGroup childGroup;
+        final ChannelHandler childHandler;
+        final Map.Entry<ChannelOption<?>, Object>[] childOptions;
+        final Map.Entry<AttributeKey<?>, Object>[] childAttrs;
+
+        {
             try {
                 final Class<? extends ChannelHandler> acceptorClass = (Class<? extends ChannelHandler>) Class.forName("io.netty.bootstrap.ServerBootstrap$ServerBootstrapAcceptor");
-                final Field childGroupField = acceptorClass.getDeclaredField("childGroup");
-                childGroupField.setAccessible(true);
-                final EventLoopGroup childGroup = (EventLoopGroup) childGroupField.get(pipeline().get(acceptorClass));
-                return childGroup.register(child);
+                ChannelHandler handler = pipeline().get(acceptorClass);
+
+                {
+                    final Field childGroupField = acceptorClass.getDeclaredField("childGroup");
+                    childGroupField.setAccessible(true);
+                    this.childGroup = (EventLoopGroup) childGroupField.get(handler);
+                }
+
+                {
+                    final Field childHandlerField = acceptorClass.getDeclaredField("childHandler");
+                    childHandlerField.setAccessible(true);
+                    this.childHandler = (ChannelHandler) childHandlerField.get(handler);
+                }
+
+                {
+                    final Field childOptionsField = acceptorClass.getDeclaredField("childOptions");
+                    childOptionsField.setAccessible(true);
+                    this.childOptions = (Map.Entry<ChannelOption<?>, Object>[]) childOptionsField.get(handler);
+                }
+
+                {
+                    final Field childAttrsField = acceptorClass.getDeclaredField("childAttrs");
+                    childAttrsField.setAccessible(true);
+                    this.childAttrs = (Map.Entry<AttributeKey<?>, Object>[]) childAttrsField.get(handler);
+                }
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }

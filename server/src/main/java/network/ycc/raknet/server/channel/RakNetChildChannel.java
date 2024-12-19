@@ -195,6 +195,7 @@ public class RakNetChildChannel extends AbstractChannel {
             channelPromise.trySuccess();
             return channelPromise;
         }
+        ChannelUtil.setChannelOptions(listener, parent().getChannelParameters().childOptions);
         listener.config()
                 .setReuseAddress(true)
                 .setAutoRead(true)

@@ -21,7 +21,7 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
 
     public static final String NAME_CLIENT_PARENT_THREADED_READ_HANDLER = "rn-client-parent-threaded-read-handler";
 
-    private EventLoop providedEventLoop = null;
+    private EventLoop providedParentEventLoop = null;
     private EventLoop pendingEventLoop = null;
 
     public RakNetClientThreadedChannel() {
@@ -39,8 +39,19 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
         setupDefaultPipeline();
     }
 
+    @Deprecated
     public void setProvidedEventLoop(EventLoop providedEventLoop) {
-        this.providedEventLoop = providedEventLoop;
+        this.setProvidedParentEventLoop(providedEventLoop);
+    }
+
+    /**
+     * Set the event loop to be used for the IO thread.
+     * Required if this channel is registered with an event loop incompatible with the IO used.
+     *
+     * @param providedParentEventLoop the event loop
+     */
+    public void setProvidedParentEventLoop(EventLoop providedParentEventLoop) {
+        this.providedParentEventLoop = providedParentEventLoop;
     }
 
     private void setupDefaultPipeline() {
@@ -244,7 +255,7 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
 
     private void registerParent() {
         if (!parent().isRegistered()) {
-            EventLoop loop = this.providedEventLoop != null ? this.providedEventLoop : this.pendingEventLoop;
+            EventLoop loop = this.providedParentEventLoop != null ? this.providedParentEventLoop : this.pendingEventLoop;
             if (loop == null)
                 throw new IllegalStateException("channel not registered");
             loop.register(parent());
