@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets;
 public class TestHelloWorld {
 
     final EventLoopGroup ioGroup = new NioEventLoopGroup();
-    final EventLoopGroup childGroup = new DefaultEventLoopGroup();
+    final EventLoopGroup childGroup = new NioEventLoopGroup();
     final InetSocketAddress localhost = new InetSocketAddress("localhost", 31747);
     final String helloWorld = "Hello world!";
 
@@ -65,9 +65,11 @@ public class TestHelloWorld {
                     }
                 }).connect(localhost).sync().channel();
 
-        final ByteBuf helloWorldBuf = Unpooled.buffer();
-        helloWorldBuf.writeCharSequence(helloWorld, StandardCharsets.UTF_8);
-        clientChannel.writeAndFlush(helloWorldBuf).sync();
+        for (int i = 0; i < 8; i ++) {
+            final ByteBuf helloWorldBuf = Unpooled.buffer();
+            helloWorldBuf.writeCharSequence(helloWorld, StandardCharsets.UTF_8);
+            clientChannel.writeAndFlush(helloWorldBuf).sync();
+        }
 
         serverChannel.close().sync();
         clientChannel.close().sync();

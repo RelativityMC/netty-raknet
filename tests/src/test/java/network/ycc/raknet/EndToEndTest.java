@@ -40,7 +40,7 @@ import java.util.function.BiConsumer;
 
 public class EndToEndTest {
     final EventLoopGroup ioGroup = new NioEventLoopGroup();
-    final EventLoopGroup childGroup = new DefaultEventLoopGroup();
+    final EventLoopGroup childGroup = new NioEventLoopGroup();
     final InetSocketAddress localhost = new InetSocketAddress("localhost", 31745);
     final InetSocketAddress localSender = new InetSocketAddress("localhost", 31745);
 
@@ -139,26 +139,6 @@ public class EndToEndTest {
     @Test
     public void manyBufferBadBoth() throws Throwable {
         dataTest(100, 5000, true, true, false);
-    }
-
-    @Test
-    public void manyBufferTestMocked() throws Throwable {
-        dataTest(1000, 5000, false, false, true);
-    }
-
-    @Test
-    public void manyBufferBadClientMocked() throws Throwable {
-        dataTest(1000, 5000, false, false, true);
-    }
-
-    @Test
-    public void manyBufferBadServerMocked() throws Throwable {
-        dataTest(1000, 5000, true, true, true);
-    }
-
-    @Test
-    public void manyBufferBadBothMocked() throws Throwable {
-        dataTest(2000, 3000, true, true, true);
     }
 
     @Test

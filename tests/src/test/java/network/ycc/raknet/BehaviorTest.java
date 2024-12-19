@@ -31,7 +31,7 @@ import java.util.concurrent.ExecutionException;
 
 public class BehaviorTest {
     final EventLoopGroup ioGroup = new NioEventLoopGroup();
-    final EventLoopGroup childGroup = new DefaultEventLoopGroup();
+    final EventLoopGroup childGroup = new NioEventLoopGroup();
     final int port = 31747;
     final InetSocketAddress localhost = new InetSocketAddress("localhost", port);
     final RakNet.Magic badMagic = new DefaultMagic(new byte[16]);

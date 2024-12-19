@@ -60,12 +60,13 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
     protected void gracefulClose(ChannelPromise promise) {
         final PromiseCombiner combined = new PromiseCombiner();
         final ChannelPromise childrenClosed = newPromise();
-        childMap.values().forEach(child -> combined.add(child.applicationChannel.close()));
+        childMap.values().forEach(child -> combined.add(child.applicationChannel.close())); // TODO we can technically close the server while keeping all child connections alive
         combined.finish(childrenClosed);
         childrenClosed.addListener(f -> listener.close(wrapPromise(promise)));
     }
 
     protected void addDefaultPipeline() {
+        listener.config().setReuseAddress(true);
         pipeline()
                 .addLast(newServerHandler())
                 .addLast(RakNetServer.DefaultDatagramInitializer.INSTANCE);
@@ -76,7 +77,7 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
     }
 
     protected RakNetChildChannel newChild(InetSocketAddress remoteAddress, InetSocketAddress localAddress, Consumer<Channel> registerChannel) {
-        return new RakNetChildChannel(this, remoteAddress, localAddress, registerChannel);
+        return new RakNetChildChannel(this.ioChannelSupplier, this, remoteAddress, localAddress, registerChannel);
     }
 
     protected void removeChild(SocketAddress remoteAddress, RakNetChildChannel child) {
@@ -85,6 +86,10 @@ public class RakNetServerChannel extends DatagramChannelProxy implements ServerC
 
     protected void addChild(SocketAddress remoteAddress, RakNetChildChannel child) {
         childMap.put(remoteAddress, child);
+    }
+
+    DatagramChannel backingChannel() {
+        return this.listener;
     }
 
     protected class ServerHandler extends ChannelDuplexHandler {

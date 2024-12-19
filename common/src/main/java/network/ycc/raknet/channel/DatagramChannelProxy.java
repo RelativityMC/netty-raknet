@@ -32,11 +32,13 @@ public class DatagramChannelProxy implements Channel {
 
     public static final String LISTENER_HANDLER_NAME = "rn-udp-listener-handler";
 
+    protected final Supplier<? extends DatagramChannel> ioChannelSupplier;
     protected final DefaultChannelPipeline pipeline;
     protected final DatagramChannel listener;
     protected final Config config;
 
     public DatagramChannelProxy(Supplier<? extends DatagramChannel> ioChannelSupplier) {
+        this.ioChannelSupplier = ioChannelSupplier;
         listener = ioChannelSupplier.get();
         pipeline = newChannelPipeline();
         listener.pipeline().addLast(LISTENER_HANDLER_NAME, new ListenerInboundProxy());

@@ -2,7 +2,11 @@ package network.ycc.raknet.server.channel;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelOutboundHandler;
+import io.netty.channel.socket.DatagramChannel;
+import io.netty.handler.flush.FlushConsolidationHandler;
 import network.ycc.raknet.RakNet;
 import network.ycc.raknet.config.DefaultConfig;
 import network.ycc.raknet.pipeline.FlushTickHandler;
@@ -21,16 +25,19 @@ import io.netty.channel.EventLoop;
 import io.netty.channel.socket.DatagramPacket;
 
 import java.net.InetSocketAddress;
+import java.net.NoRouteToHostException;
 import java.net.SocketAddress;
+import java.nio.channels.ClosedChannelException;
 import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class RakNetChildChannel extends AbstractChannel {
+
+    public static final String WRITE_HANDLER_NAME = "rn-child-channel-write-handler";
 
     private static final ChannelMetadata metadata = new ChannelMetadata(false);
     protected final ChannelPromise connectPromise;
@@ -42,11 +49,13 @@ public class RakNetChildChannel extends AbstractChannel {
     protected final AtomicBoolean isRegisteringApplicationChannel = new AtomicBoolean(false);
     protected final Queue<Runnable> pendingApplicationChannelOperations = new LinkedList<>();
     protected final Consumer<Channel> registerChannel;
+    private final DatagramChannel listener;
 
     protected volatile boolean open = true;
 
-    public RakNetChildChannel(Channel parent, InetSocketAddress remoteAddress, InetSocketAddress localAddress, Consumer<Channel> registerChannel) {
+    public RakNetChildChannel(Supplier<? extends DatagramChannel> ioChannelSupplier, Channel parent, InetSocketAddress remoteAddress, InetSocketAddress localAddress, Consumer<Channel> registerChannel) {
         super(parent);
+        this.listener = ioChannelSupplier.get();
         this.remoteAddress = remoteAddress;
         this.localAddress = localAddress;
         this.registerChannel = Objects.requireNonNull(registerChannel);
@@ -56,7 +65,7 @@ public class RakNetChildChannel extends AbstractChannel {
         config.setMetrics(parent.config().getOption(RakNet.METRICS));
         config.setServerId(parent.config().getOption(RakNet.SERVER_ID));
         this.applicationChannel = new RakNetApplicationChannel(this);
-        pipeline().addLast(new WriteHandler());
+        pipeline().addLast(WRITE_HANDLER_NAME, new WriteHandler());
         addDefaultPipeline();
     }
 
@@ -149,6 +158,7 @@ public class RakNetChildChannel extends AbstractChannel {
 
     protected void doClose() {
         open = false;
+        listener.close();
     }
 
     protected void doBeginRead() {
@@ -177,6 +187,58 @@ public class RakNetChildChannel extends AbstractChannel {
 
     public RakNetApplicationChannel getApplicationChannel() {
         return this.applicationChannel;
+    }
+
+    protected synchronized ChannelPromise initStandaloneListener() {
+        ChannelPromise channelPromise = this.newPromise();
+        if (listener.isRegistered()) {
+            System.out.println("Already registered?");
+            channelPromise.trySuccess();
+            return channelPromise;
+        }
+        listener.config()
+                .setReuseAddress(true)
+                .setAutoRead(true)
+                .setRecvByteBufAllocator(this.parent().backingChannel().config().getRecvByteBufAllocator());
+        listener.pipeline()
+                .addLast(WRITE_HANDLER_NAME, new ListenerInboundProxy())
+                .addLast(new FlushConsolidationHandler(256, true))
+                .addLast(new ChannelInboundHandlerAdapter() {
+                    @Override
+                    public void channelActive(ChannelHandlerContext ctx) {
+                        ctx.fireChannelActive();
+                        ctx.read();
+                        RakNetChildChannel.this.pipeline().replace(WRITE_HANDLER_NAME, WRITE_HANDLER_NAME, new ListenerOutboundProxy());
+                    }
+                });
+        this.eventLoop().register(this.listener).addListener(future -> {
+            if (future.isSuccess()) {
+                listener.connect(this.remoteAddress, this.localAddress).addListener(future1 -> {
+                    if (future1.isDone()) {
+                        channelPromise.trySuccess();
+                    } else {
+                        channelPromise.setFailure(future1.cause());
+                        future1.cause().printStackTrace();
+                    }
+                });
+            } else {
+                channelPromise.setFailure(future.cause());
+                future.cause().printStackTrace();
+            }
+        });
+        return channelPromise;
+    }
+
+    protected ChannelPromise wrapPromise(ChannelPromise in) {
+        final ChannelPromise out = listener.newPromise();
+        out.addListener(res -> {
+            if (res.isSuccess()) {
+                in.trySuccess();
+            } else {
+                in.tryFailure(res.cause());
+            }
+        });
+        return out;
     }
 
     protected class WriteHandler extends ChannelOutboundHandlerAdapter {
@@ -213,11 +275,13 @@ public class RakNetChildChannel extends AbstractChannel {
         @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
             registerApplicationChannelIfNecessary();
-            if (applicationChannel.isRegistered()) {
-                applicationChannel.pipeline().fireChannelActive();
-            } else {
-                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelActive());
-            }
+            initStandaloneListener().addListener(future -> {
+                if (applicationChannel.isRegistered()) {
+                    applicationChannel.pipeline().fireChannelActive();
+                } else {
+                    pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelActive());
+                }
+            });
         }
 
         @Override
@@ -281,6 +345,124 @@ public class RakNetChildChannel extends AbstractChannel {
                 pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireExceptionCaught(cause));
             }
         }
+    }
+
+    protected class ListenerOutboundProxy implements ChannelOutboundHandler {
+
+        public void handlerAdded(ChannelHandlerContext ctx) {
+            assert listener.eventLoop().inEventLoop();
+        }
+
+        public void bind(ChannelHandlerContext ctx, SocketAddress localAddress,
+                         ChannelPromise promise) {
+//            listener.bind(localAddress, wrapPromise(promise));
+            promise.setFailure(new UnsupportedOperationException());
+        }
+
+        public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress,
+                            SocketAddress localAddress, ChannelPromise promise) {
+//            listener.connect(remoteAddress, localAddress, wrapPromise(promise));
+            promise.setFailure(new UnsupportedOperationException());
+        }
+
+        public void handlerRemoved(ChannelHandlerContext ctx) {
+            // NOOP
+        }
+
+        public void disconnect(ChannelHandlerContext ctx, ChannelPromise promise) {
+//            listener.disconnect(wrapPromise(promise));
+            promise.setFailure(new UnsupportedOperationException());
+        }
+
+        public void close(ChannelHandlerContext ctx, ChannelPromise promise) {
+            listener.close(wrapPromise(promise));
+        }
+
+        public void deregister(ChannelHandlerContext ctx, ChannelPromise promise) {
+            ctx.deregister(promise);
+        }
+
+        public void read(ChannelHandlerContext ctx) {
+            // NOOP
+        }
+
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
+            listener.write(msg, wrapPromise(promise));
+        }
+
+        public void flush(ChannelHandlerContext ctx) {
+            listener.flush();
+        }
+
+        @SuppressWarnings("deprecation")
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            if (cause instanceof NoRouteToHostException) {
+                return;
+            }
+            ctx.fireExceptionCaught(cause);
+        }
+
+    }
+
+    protected class ListenerInboundProxy implements ChannelInboundHandler {
+
+        public void channelRegistered(ChannelHandlerContext ctx) {
+        }
+
+        public void channelUnregistered(ChannelHandlerContext ctx) {
+        }
+
+        public void handlerAdded(ChannelHandlerContext ctx) {
+            assert listener.eventLoop().inEventLoop();
+        }
+
+        public void channelActive(ChannelHandlerContext ctx) {
+            // NOOP - active status managed by connection sequence
+        }
+
+        public void channelInactive(ChannelHandlerContext ctx) {
+        }
+
+        public void handlerRemoved(ChannelHandlerContext ctx) {
+            // NOOP
+        }
+
+        public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            if (msg instanceof DatagramPacket) {
+                DatagramPacket datagram = (DatagramPacket) msg;
+                try {
+                    if (isActive()) {
+                        final ByteBuf retained = datagram.content().retain();
+                        pipeline().fireChannelRead(retained);
+                    }
+                } finally {
+                    datagram.release();
+                }
+            } else {
+                pipeline().fireChannelRead(msg);
+            }
+        }
+
+        public void channelReadComplete(ChannelHandlerContext ctx) {
+            pipeline().fireChannelReadComplete();
+        }
+
+        public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
+            // NOOP
+        }
+
+        public void channelWritabilityChanged(ChannelHandlerContext ctx) {
+            pipeline().fireChannelWritabilityChanged();
+        }
+
+        @SuppressWarnings("deprecation")
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            if (cause instanceof ClosedChannelException) {
+                return;
+            }
+            pipeline().fireExceptionCaught(cause);
+        }
+
     }
 
 }
