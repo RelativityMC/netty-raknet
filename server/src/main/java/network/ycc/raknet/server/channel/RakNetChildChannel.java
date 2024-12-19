@@ -158,7 +158,6 @@ public class RakNetChildChannel extends AbstractChannel {
 
     protected void doClose() {
         open = false;
-        listener.close();
     }
 
     protected void doBeginRead() {
@@ -201,16 +200,17 @@ public class RakNetChildChannel extends AbstractChannel {
                 .setAutoRead(true)
                 .setRecvByteBufAllocator(this.parent().backingChannel().config().getRecvByteBufAllocator());
         listener.pipeline()
-                .addLast(WRITE_HANDLER_NAME, new ListenerInboundProxy())
-                .addLast(new FlushConsolidationHandler(256, true))
                 .addLast(new ChannelInboundHandlerAdapter() {
                     @Override
                     public void channelActive(ChannelHandlerContext ctx) {
                         ctx.fireChannelActive();
                         ctx.read();
                         RakNetChildChannel.this.pipeline().replace(WRITE_HANDLER_NAME, WRITE_HANDLER_NAME, new ListenerOutboundProxy());
+                        ctx.pipeline().remove(this);
                     }
-                });
+                })
+                .addLast(WRITE_HANDLER_NAME, new ListenerInboundProxy())
+                .addLast(new FlushConsolidationHandler(256, true));
         this.eventLoop().register(this.listener).addListener(future -> {
             if (future.isSuccess()) {
                 listener.connect(this.remoteAddress, this.localAddress).addListener(future1 -> {
@@ -375,7 +375,18 @@ public class RakNetChildChannel extends AbstractChannel {
         }
 
         public void close(ChannelHandlerContext ctx, ChannelPromise promise) {
-            listener.close(wrapPromise(promise));
+            if (listener.isRegistered()) {
+                ChannelPromise listenerClose = ctx.newPromise();
+                listener.close(wrapPromise(listenerClose));
+                listenerClose.addListener(future -> {
+                    if (!future.isSuccess()) {
+                        future.cause().printStackTrace();
+                    }
+                    ctx.close(promise);
+                });
+            } else {
+                ctx.close(promise);
+            }
         }
 
         public void deregister(ChannelHandlerContext ctx, ChannelPromise promise) {
@@ -387,7 +398,7 @@ public class RakNetChildChannel extends AbstractChannel {
         }
 
         public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-            listener.write(msg, wrapPromise(promise));
+            listener.write(msg, wrapPromise(promise)).addListener(RakNet.INTERNAL_WRITE_LISTENER);
         }
 
         public void flush(ChannelHandlerContext ctx) {
