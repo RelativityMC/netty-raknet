@@ -158,6 +158,9 @@ public class RakNetChildChannel extends AbstractChannel {
 
     protected void doClose() {
         open = false;
+        if (this.applicationChannel.isRegistered()) {
+            this.applicationChannel.close();
+        }
     }
 
     protected void doBeginRead() {
