@@ -9,6 +9,7 @@ import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoop;
 import io.netty.channel.RecvByteBufAllocator;
+import io.netty.util.concurrent.PromiseCombiner;
 import network.ycc.raknet.RakNet;
 
 import java.net.SocketAddress;
@@ -154,8 +155,12 @@ public class RakNetApplicationChannel extends AbstractChannel {
             @Override
             public void close(ChannelPromise promise) {
                 parent().close().addListener(future -> {
-                    if (future.isSuccess()) promise.trySuccess();
-                    else promise.tryFailure(future.cause());
+                    PromiseCombiner combiner = new PromiseCombiner();
+                    ChannelPromise newPromise = promise.channel().newPromise();
+                    promise.channel().eventLoop().execute(() -> RakNetApplicationChannelUnsafe.this.close(newPromise));
+                    combiner.add((ChannelFuture) newPromise);
+                    combiner.add(future);
+                    combiner.finish(promise);
                 });
             }
 
