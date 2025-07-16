@@ -5,6 +5,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInboundHandler;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelOutboundHandler;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.handler.flush.FlushConsolidationHandler;
 import network.ycc.raknet.RakNet;
@@ -281,10 +282,17 @@ public class RakNetChildChannel extends AbstractChannel {
             registerApplicationChannelIfNecessary();
             initStandaloneListener().addListener(future -> {
                 if (applicationChannel.isRegistered()) {
-                    applicationChannel.pipeline().fireChannelActive();
+                    channelActive0();
                 } else {
-                    pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelActive());
+                    pendingApplicationChannelOperations.add(this::channelActive0);
                 }
+            });
+        }
+
+        private void channelActive0() {
+            applicationChannel.eventLoop().execute(() -> {
+                applicationChannel.setActiveInternal(true);
+                applicationChannel.pipeline().fireChannelActive();
             });
         }
 
@@ -292,10 +300,17 @@ public class RakNetChildChannel extends AbstractChannel {
         public void channelInactive(ChannelHandlerContext ctx) throws Exception {
             registerApplicationChannelIfNecessary();
             if (applicationChannel.isRegistered()) {
-                applicationChannel.pipeline().fireChannelInactive();
+                channelInactive0();
             } else {
-                pendingApplicationChannelOperations.add(() -> applicationChannel.pipeline().fireChannelInactive());
+                pendingApplicationChannelOperations.add(this::channelInactive0);
             }
+        }
+
+        private void channelInactive0() {
+            applicationChannel.eventLoop().execute(() -> {
+                applicationChannel.setActiveInternal(false);
+                applicationChannel.pipeline().fireChannelInactive();
+            });
         }
 
         @Override

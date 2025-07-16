@@ -18,6 +18,8 @@ public class RakNetApplicationChannel extends AbstractChannel {
 
     public static final String NAME_SERVER_PARENT_THREADED_READ_HANDLER = "rn-server-parent-threaded-read-handler";
 
+    private volatile boolean active = false;
+
     protected RakNetApplicationChannel(RakNetChildChannel parent) {
         super(parent);
     }
@@ -70,12 +72,14 @@ public class RakNetApplicationChannel extends AbstractChannel {
     }
 
     protected void doDisconnect() {
-        close();
+//        close();
+        this.active = false;
         parent().close();
     }
 
     protected void doClose() {
-        close();
+//        close();
+        this.active = false;
         parent().close();
     }
 
@@ -96,7 +100,11 @@ public class RakNetApplicationChannel extends AbstractChannel {
     }
 
     public boolean isActive() {
-        return isOpen() && parent().isActive();
+        return this.active;
+    }
+
+    void setActiveInternal(boolean active) {
+        this.active = active;
     }
 
     public ChannelMetadata metadata() {

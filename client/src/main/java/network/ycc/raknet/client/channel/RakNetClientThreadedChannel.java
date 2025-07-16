@@ -25,6 +25,8 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
     private EventLoop providedParentEventLoop = null;
     private EventLoop pendingEventLoop = null;
 
+    private volatile boolean active = false;
+
     public RakNetClientThreadedChannel() {
         super(new RakNetClientChannel());
         setupDefaultPipeline();
@@ -113,12 +115,14 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
     }
 
     protected void doDisconnect() {
-        close();
+//        close();
+        this.active = false;
         parent().close();
     }
 
     protected void doClose() {
-        close();
+//        close();
+        this.active = false;
         parent().close();
     }
 
@@ -139,7 +143,7 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
     }
 
     public boolean isActive() {
-        return isOpen() && parent().isActive();
+        return this.active;
     }
 
     public ChannelMetadata metadata() {
@@ -276,12 +280,18 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
 
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
-            RakNetClientThreadedChannel.this.pipeline().fireChannelActive();
+            RakNetClientThreadedChannel.this.eventLoop().execute(() -> {
+                RakNetClientThreadedChannel.this.active = true;
+                RakNetClientThreadedChannel.this.pipeline().fireChannelActive();
+            });
         }
 
         @Override
         public void channelInactive(ChannelHandlerContext ctx) {
-            RakNetClientThreadedChannel.this.pipeline().fireChannelInactive();
+            RakNetClientThreadedChannel.this.eventLoop().execute(() -> {
+                RakNetClientThreadedChannel.this.active = false;
+                RakNetClientThreadedChannel.this.pipeline().fireChannelInactive();
+            });
         }
 
         @Override
