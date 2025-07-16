@@ -194,10 +194,15 @@ public class RakNetClientThreadedChannel extends AbstractChannel {
 
             @Override
             public void close(ChannelPromise promise) {
+                EventLoop parentEventLoop = parent().eventLoop(); // to prevent deregister race
                 parent().close().addListener(future -> {
                     PromiseCombiner combiner = new PromiseCombiner();
                     ChannelPromise newPromise = promise.channel().newPromise();
-                    promise.channel().eventLoop().execute(() -> RakNetClientThreadedChannelUnsafe.this.close(newPromise));
+                    parentEventLoop.execute(() -> { // wait for parent to finish deregistering
+                        promise.channel().eventLoop().execute(() -> {
+                            RakNetClientThreadedChannelUnsafe.this.close(newPromise);
+                        });
+                    });
                     combiner.add((ChannelFuture) newPromise);
                     combiner.add(future);
                     combiner.finish(promise);
